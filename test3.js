@@ -1,338 +1,353 @@
+goog.require("goog.asserts");
 goog.require("goog.dom");
+goog.require("goog.debug.Logger");
 goog.require("goog.vec.Mat4");
 goog.require("goog.vec.Vec3");
 
-function Spinteny(canvasId) {
-    this.canvas = goog.dom.getElement(canvasId);
-    this.gl = WebGLUtils.setupWebGL(this.canvas);
-    gl.viewportWidth = this.canvas.width;
-    gl.viewportHeight = this.canvas.height;
+function Spinteny(container) {
+    var container = goog.dom.getElement(container);
+    this.context = new GLOW.Context();
+    this.context.setupClear( { red: 1, green: 1, blue: 1 } );
+    container.appendChild(this.context.domElement);
+
+    this.anchorHeight = 10;
+    this.genomeSpacing = 5;
+
+    this.mappers = 
+	[0, 1, 2, 3].map(
+	    function(orgId) {
+		return new CylMapper(
+		    [
+			{ start: 0, end: 10000, name: "a" },
+			{ start: 0, end: 10000, name: "b" },
+			{ start: 0, end: 10000, name: "c" },
+			{ start: 0, end: 10000, name: "d" },
+			{ start: 0, end: 10000, name: "e" }
+		    ],
+		    new goog.vec.Vec3.createFromValues(0.0, -1.0, 0.0),
+		    new goog.vec.Vec3.createFromValues(0.0, 0.0, -1.0)
+		);
+	    }
+	);
+
+    var LCBs = [0, 1, 2, 3, 4].map(
+	    function(chrId) {
+		return [
+		    [
+			[0, chrId, 0, 4000],
+			[1, chrId, 0, 4000],
+			[2, chrId, 0, 4000],
+			[3, chrId, 0, 4000],
+		    ],
+		    [
+			[0, chrId, 6000, 10000],
+			[1, chrId, 6000, 10000],
+			[2, chrId, 6000, 10000],
+			[3, chrId, 6000, 10000],
+		    ]
+		];
+	    }
+	);
+    var joined = LCBs.reduce(function(a, b) {
+	return a.concat(b);
+    }, []);
+
+    var synVerts = this.LCBsToVertices(joined);
+    
+    console.log(synVerts);
+}
+
+function copyVec3(src, dst, offset) {
+    dst[offset + 0] = src[0];
+    dst[offset + 1] = src[1];
+    dst[offset + 2] = src[2];
+}
+
+function trianglesForQuad(vertices, dst, offset) {
+    copyVec3(vertices[0], dst, offset + 0 );
+    copyVec3(vertices[1], dst, offset + 3 );
+    copyVec3(vertices[2], dst, offset + 6 );
+    copyVec3(vertices[1], dst, offset + 9 );
+    copyVec3(vertices[2], dst, offset + 12);
+    copyVec3(vertices[3], dst, offset + 15);
+}
+
+/**
+ * calculate a (normalized) face normal for the triangle with
+ * the given vertices.
+ */
+function triangleFaceNormal(v1, v2, v3) {
+    var v12 = goog.vec.Vec3.create();
+    var v13 = goog.vec.Vec3.create();
+    goog.vec.Vec3.subtract(v2, v1, v12);
+    goog.vec.Vec3.subtract(v3, v1, v13);
+    var result = goog.vec.Vec3.create();
+    goog.vec.Vec3.cross(v12, v13, result);
+    goog.vec.Vec3.normalize(result, result);
+    return result;
+}
+
+/**
+ * calculate normals for the vertices in src
+ * (assumes src and dst are arrays that could be passed to
+ *  gl.drawArrays with GL_TRIANGLES)
+ * (also assumes that normals should be perpendicular to the triangle face)
+ */
+function calcArrayFaceNormals(src, dst) {
+    goog.asserts.assert(src.length == dst.length);
+
+    var v12 = goog.vec.Vec3.create();
+    var v13 = goog.vec.Vec3.create();
+    for (var i = 0; i < src.length; i += 9) {
+	v12[0] = src[i + 3] - src[i + 0];
+	v12[1] = src[i + 4] - src[i + 1];
+	v12[2] = src[i + 5] - src[i + 2];
+	v13[0] = src[i + 6] - src[i + 0];
+	v13[1] = src[i + 7] - src[i + 1];
+	v13[2] = src[i + 8] - src[i + 2];
+	var result = goog.vec.Vec3.create();
+	goog.vec.Vec3.cross(v12, v13, result);
+	goog.vec.Vec3.normalize(result, result);
+	copyVec3(result, dst, i + 0);
+	copyVec3(result, dst, i + 3);
+	copyVec3(result, dst, i + 6);
+    }
+}
+
+function repeat(val, dst, offset, count) {
+    for (var i = 0; i < count; i++) dst[offset + i] = val;
+}
+
+/**
+ * takes a single genome match in the form of an array:
+ * [orgID, chrID, start, end]
+ * and returns a quadrilateral that covers that region of the
+ * spinteny cylinder in the form of an array of four vec3's:
+ * [topStart, topEnd, botStart, botEnd]
+ */
+Spinteny.prototype.matchToQuad = function(match) {
+    return [
+	this.mappers[match[0]].toSpatial(match[1], match[2], 0),
+	this.mappers[match[0]].toSpatial(match[1], match[3], 0),
+	this.mappers[match[0]].toSpatial(match[1], match[2], 1),
+	this.mappers[match[0]].toSpatial(match[1], match[3], 1)
+    ];
+}
+
+/**
+ * takes an array of locally collinear blocks of the format:
+ * [ [orgID, chrID, start, end], [orgID, chrID, start, end], ... ]
+ *
+ * and returns an object with
+ * { 
+ *     anchors:
+ *         {
+ *             vertex: 
+ *             normal:
+ *             org:
+ *         }
+ *     twists:
+ *         {
+ *             vertex:
+ *             org:
+ *             sideVec:
+ *             otherVert:
+ *             otherOrg:
+ *         }
+ * }
+ *
+ * "anchors" visually represent the span of an LCB on a particular genome.
+ * "twists" visually represent the connections between related anchors.
+ * "twists" has extra vertex attributes because we need to calculate
+ * vertex normals within the vertex shader for the twists
+ * (the normals depend on the position of a twist's top and bottom anchors,
+ * and those positions are calculated within the vertex shader)
+ * the normals for the twist vertices will be the cross product of
+ * sideVec and vector from the current vertex to the otherVert, where
+ * the otherVert has been transformed according to the transformation for
+ * otherOrg.
+ */
+Spinteny.prototype.LCBsToVertices = function(blocks) {
+    var numAnchors = 0;
+    var numTwists = 0;
+    for (var i = 0; i < blocks.length; i++) {
+	// there's an anchor for each block,
+	numAnchors += blocks[i].length;
+	// and there's a twist between related anchors
+	numTwists += blocks[i].length - 1;
+    }
+    // anchors and twists are planar quadrilaterals
+    // using drawArrays means 6 vertices per face
+    var anchVertCount = 6 * numAnchors;
+    var anchors = {
+	vertex: new Float32Array(3 * anchVertCount),
+	normal: new Float32Array(3 * anchVertCount),
+	// ideally, orgs would be an unsigned int (or short or byte) array,
+	// but GLSL (in webGL 1.0) doesn't allow those types for attributes
+	org: new Float32Array(anchVertCount)
+    };
+
+    var twistVertCount = 6 * numTwists;
+    var twists = {
+	vertex: new Float32Array(3 * twistVertCount),
+        org: new Float32Array(twistVertCount),
+        sideVec: new Float32Array(3 * twistVertCount),
+        otherVert: new Float32Array(3 * twistVertCount),
+        otherOrg: new Float32Array(3 * twistVertCount)
+    };
+
+    var curAnchor = 0;
+    var curTwist = 0;
+    var topStart, topEnd, botStart, botEnd;
+    var orgId = 0, chrId = 1, start = 2, end = 3; 
+
+    for (var blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
+	var block = blocks[blockIdx];
+	var match = 0;
+
+	// take the genome-space match and convert it into
+	// four 3d-space vertex positions for the quadrilateral
+	// that will visually represent the match
+	var anchorVerts = this.matchToQuad(block[match]);
+
+	// add two triangles for this quad to anchors.vertex
+	// (18 is for 3 values (x, y, z) for 6 vertices)
+	trianglesForQuad(anchorVerts, anchors.vertex, curAnchor * 18);
+	// set anchors.org to this organism ID for all 6 vertices
+	// in the quad
+	var org = block[match][orgId];
+	repeat(org, anchors.org, curAnchor * 6, 6);
+	curAnchor++;
+	
+	for (match = 1; match < block.length; match++) {
+	    var oldAnchorVerts = anchorVerts;
+	    anchorVerts = this.matchToQuad(block[match]);
+
+	    // the top two vertices for twistVerts are the bottom two
+	    // from the previous anchor, and the bottom two vertices for
+	    // twistVerts are the top two vertices from the next anchor
+	    //
+	    //       0            1
+	    //       |  oldAnchor |
+	    //       2            3
+	    //       /            /
+	    //      /    twist   /
+	    //     /            /
+	    //    0            1
+            //    |   anchor   |
+	    //    2            3
+	    twistVerts = [oldAnchorVerts[2], oldAnchorVerts[3],
+			  anchorVerts[0], anchorVerts[1]];
+	    trianglesForQuad(twistVerts, twists.vertex, curTwist * 18);
+
+	    var prevOrg = org;
+	    org = block[match][orgId];
+	    // the top vertices of the twist are for the previous org,
+	    // and the bottom vertices of the twist are for the current org
+	    twists.org[curTwist * 6 + 0] = prevOrg; // top left
+	    twists.org[curTwist * 6 + 1] = prevOrg; // top right
+	    twists.org[curTwist * 6 + 2] = org;     // bottom left
+	    twists.org[curTwist * 6 + 3] = prevOrg; // top right
+	    twists.org[curTwist * 6 + 4] = org;     // bottom left
+	    twists.org[curTwist * 6 + 5] = org;     // bottom right
+	    // and the twists.otherOrg values are the inverse of
+	    // the twists.org values
+	    twists.otherOrg[curTwist * 6 + 0] = org;
+	    twists.otherOrg[curTwist * 6 + 1] = org;
+	    twists.otherOrg[curTwist * 6 + 2] = prevOrg;
+	    twists.otherOrg[curTwist * 6 + 3] = org;
+	    twists.otherOrg[curTwist * 6 + 4] = prevOrg;
+	    twists.otherOrg[curTwist * 6 + 5] = prevOrg;
+
+	    var sideVec = goog.vec.Vec3.create();
+	    goog.vec.Vec3.subtract(twistVerts[0], twistVerts[1], sideVec);
+	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 0); // TL
+	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 3); // TR
+	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 9); // TR
+
+	    copyVec3(twistVerts[2], twists.otherVert, curTwist * 18 + 0);
+	    copyVec3(twistVerts[3], twists.otherVert, curTwist * 18 + 3);
+	    copyVec3(twistVerts[3], twists.otherVert, curTwist * 18 + 9);
+
+	    goog.vec.Vec3.subtract(twistVerts[2], twistVerts[3], sideVec);
+	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 6);  // BL
+	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 12); // BL
+	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 15); // BR
+	    
+	    copyVec3(twistVerts[0], twists.otherVert, curTwist * 18 + 6);
+	    copyVec3(twistVerts[0], twists.otherVert, curTwist * 18 + 12);
+	    copyVec3(twistVerts[1], twists.otherVert, curTwist * 18 + 15);
+	    
+	    curTwist++;
+
+	    trianglesForQuad(anchorVerts, anchors.vertex, curAnchor * 18);
+	    repeat(org, anchors.org, curAnchor * 6, 6);
+	    curAnchor++;
+	}
+    }
+
+    calcArrayFaceNormals(anchors.vertex, anchors.normal);
+
+    return { anchors: anchors, twists: twists };
 }
 
 /**
  * maps between genomic and spatial coordinates on a cylinder
- * @param scaffolds array of {start, end, name (optional)} objects
+ * @param chroms array of {start, end, name (optional)} objects
  * @param axis {Vec3} axis vector at the center of the cylinder
  * @param origin {Vec3} vector from the axis to the zero point
- * @param padding spacing between scaffolds (radians)
+ * @param padding spacing between chroms (radians) (optional)
  */
-function CylMapper(scaffolds, axis, origin, padding) {
+function CylMapper(chroms, axis, origin, padding) {
     this.axis = axis;
     this.origin = origin;
     // default padding of 5 degrees
     this.padding = (padding === undefined) ? Math.PI/36 : padding;
-    this.scaffolds = scaffolds;
-    //this.partialSums[i] = total length of scaffolds[0..(i-1)]
+    this.chroms = chroms;
+    //this.partialSums[i] = total length of chroms[0..(i-1)]
+    //this.partialSums[0] = 0
     this.partialSums = [];
     this.byName = {};
 
     var partialSum = 0;
-    for (var i = 0; i < scaffolds.length; i++) {
-	var name = ("name" in scaffolds[i]) ? scaffolds[i].name : i;
+    for (var i = 0; i < chroms.length; i++) {
+	var name = ("name" in chroms[i]) ? chroms[i].name : i;
 	this.byName["" + name] = i;
 	this.partialSums.push(partialSum);
-	partialSum += scaffolds[i].end - scaffolds[i].start;
+	partialSum += chroms[i].end - chroms[i].start;
     }
     this.totalLength = partialSum;
 }
 
 /**
  * takes a genomic location and converts it to a spatial location
- * @param scaffold name of the scaffold
+ * @param index index of the chrom in this mapper's chrom list
  * @param base position to convert
+ * @param distance (optional) distance along the cylinder's axis
  * @return vec3 with x,y,z of result
  */
-CylMapper.prototype.toSpatial = function(scaffold, base) {
-    var index = this.byName["" + scaffold];
+CylMapper.prototype.toSpatial = function(index, base, distance) {
+    distance = (distance === undefined) ? 0 : distance;
+    //var index = this.byName["" + chrom];
     var angle = 
-	( ( ( this.partialSum[index] + base ) / this.totalLength )
+	( ( ( this.partialSums[index] + ( base - this.chroms[index].start ) )
+	    / this.totalLength )
 	  * ( 2 * Math.PI ) )
 	+ (this.padding * index);
     var rotM = goog.vec.Mat4.makeRotate(goog.vec.Mat4.create(), angle,
-					this.axis.x, this.axis.y, this.axis.z);
+					this.axis[0],
+					this.axis[1],
+					this.axis[2]);
     var result = goog.vec.Vec3.create();
     goog.vec.Mat4.multVec3(rotM, this.origin, result);
+
+    if (0 != distance) {
+	var distVec = goog.vec.Vec3.create();
+	goog.vec.Vec3.scale(this.axis, distance, distVec);
+	goog.vec.Vec3.add(result, distVec, result);
+    }
+
     return result;
 };
 
 //TODO: CylMapper.prototype.fromSpatial = function(spatialPos){}
-
-
-    
-    
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-var gl;
-
-function initGL(canvas) {
-    try {
-        gl = canvas.getContext("experimental-webgl");
-        gl.viewportWidth = canvas.width;
-        gl.viewportHeight = canvas.height;
-    } catch (e) {
-    }
-    if (!gl) {
-        alert("Could not initialise WebGL, sorry :-(");
-    }
-}
-
-
-function getShader(gl, id) {
-    var shaderScript = document.getElementById(id);
-    if (!shaderScript) {
-        return null;
-    }
-
-    var str = "";
-    var k = shaderScript.firstChild;
-    while (k) {
-        if (k.nodeType == 3) {
-            str += k.textContent;
-        }
-        k = k.nextSibling;
-    }
-
-    var shader;
-    if (shaderScript.type == "x-shader/x-fragment") {
-        shader = gl.createShader(gl.FRAGMENT_SHADER);
-    } else if (shaderScript.type == "x-shader/x-vertex") {
-        shader = gl.createShader(gl.VERTEX_SHADER);
-    } else {
-        return null;
-    }
-
-    gl.shaderSource(shader, str);
-    gl.compileShader(shader);
-
-    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        alert(gl.getShaderInfoLog(shader));
-        return null;
-    }
-
-    return shader;
-}
-
-
-var shaderProgram;
-
-function initShaders() {
-    var fragmentShader = getShader(gl, "shader-fs");
-    var vertexShader = getShader(gl, "shader-vs");
-
-    shaderProgram = gl.createProgram();
-    gl.attachShader(shaderProgram, vertexShader);
-    gl.attachShader(shaderProgram, fragmentShader);
-    gl.linkProgram(shaderProgram);
-
-    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-        alert("Could not initialise shaders");
-    }
-
-    gl.useProgram(shaderProgram);
-
-    shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
-    gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
-
-    shaderProgram.vertexColorAttribute = gl.getAttribLocation(shaderProgram, "aVertexColor");
-    gl.enableVertexAttribArray(shaderProgram.vertexColorAttribute);
-
-    shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
-    shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
-}
-
-
-var mvMatrix = mat4.create();
-var mvMatrixStack = [];
-var pMatrix = mat4.create();
-
-function mvPushMatrix() {
-    var copy = mat4.create();
-    mat4.set(mvMatrix, copy);
-    mvMatrixStack.push(copy);
-}
-
-function mvPopMatrix() {
-    if (mvMatrixStack.length == 0) {
-        throw "Invalid popMatrix!";
-    }
-    mvMatrix = mvMatrixStack.pop();
-}
-
-
-function setMatrixUniforms() {
-    gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
-    gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
-}
-
-
-function degToRad(degrees) {
-    return degrees * Math.PI / 180;
-}
-
-
-var triangleVertexPositionBuffer;
-var triangleVertexColorBuffer;
-var squareVertexPositionBuffer;
-var squareVertexColorBuffer;
-
-function initBuffers() {
-    triangleVertexPositionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
-    var vertices = [
-         0.0,  1.0,  0.0,
-        -1.0, -1.0,  0.0,
-         1.0, -1.0,  0.0
-    ];
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-    triangleVertexPositionBuffer.itemSize = 3;
-    triangleVertexPositionBuffer.numItems = 3;
-
-    triangleVertexColorBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexColorBuffer);
-    var colors = [
-        1.0, 0.0, 0.0, 1.0,
-        0.0, 1.0, 0.0, 1.0,
-        0.0, 0.0, 1.0, 1.0,
-    ];
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
-    triangleVertexColorBuffer.itemSize = 4;
-    triangleVertexColorBuffer.numItems = 3;
-
-
-    squareVertexPositionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
-    vertices = [
-         1.0,  1.0,  0.0,
-        -1.0,  1.0,  0.0,
-         1.0, -1.0,  0.0,
-        -1.0, -1.0,  0.0
-        ];
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-    squareVertexPositionBuffer.itemSize = 3;
-    squareVertexPositionBuffer.numItems = 4;
-
-    squareVertexColorBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexColorBuffer);
-    colors = []
-    for (var i=0; i < 4; i++) {
-        colors = colors.concat([0.5, 0.5, 1.0, 1.0]);
-    }
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(colors), gl.STATIC_DRAW);
-    squareVertexColorBuffer.itemSize = 4;
-    squareVertexColorBuffer.numItems = 4;
-}
-
-
-
-var rTri = 0;
-var rSquare = 0;
-
-function drawScene() {
-    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-
-    mat4.identity(mvMatrix);
-
-    mat4.translate(mvMatrix, [-1.5, 0.0, -7.0]);
-
-    mvPushMatrix();
-    mat4.rotate(mvMatrix, degToRad(rTri), [0, 1, 0]);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexPositionBuffer);
-    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, triangleVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, triangleVertexColorBuffer);
-    gl.vertexAttribPointer(shaderProgram.vertexColorAttribute, triangleVertexColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
-
-    setMatrixUniforms();
-    gl.drawArrays(gl.TRIANGLES, 0, triangleVertexPositionBuffer.numItems);
-    mvPopMatrix();
-
-
-    mat4.translate(mvMatrix, [3.0, 0.0, 0.0]);
-
-    mvPushMatrix();
-    mat4.rotate(mvMatrix, degToRad(rSquare), [1, 0, 0]);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexPositionBuffer);
-    gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, squareVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-
-    gl.bindBuffer(gl.ARRAY_BUFFER, squareVertexColorBuffer);
-    gl.vertexAttribPointer(shaderProgram.vertexColorAttribute, squareVertexColorBuffer.itemSize, gl.FLOAT, false, 0, 0);
-
-    setMatrixUniforms();
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, squareVertexPositionBuffer.numItems);
-
-    mvPopMatrix();
-}
-
-
-var lastTime = 0;
-
-function animate() {
-    var timeNow = new Date().getTime();
-    if (lastTime != 0) {
-        var elapsed = timeNow - lastTime;
-
-        rTri += (90 * elapsed) / 1000.0;
-        rSquare += (75 * elapsed) / 1000.0;
-    }
-    lastTime = timeNow;
-}
-
-
-function tick() {
-    requestAnimFrame(tick);
-    drawScene();
-    animate();
-}
-
-
-function webGLStart() {
-    var canvas = document.getElementById("lesson03-canvas");
-    initGL(canvas);
-    initShaders()
-    initBuffers();
-
-    gl.clearColor(0.0, 0.0, 0.0, 1.0);
-    gl.enable(gl.DEPTH_TEST);
-
-    tick();
-}
-
