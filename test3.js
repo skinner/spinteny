@@ -63,28 +63,19 @@ function copyVec3(src, dst, offset) {
     dst[offset + 2] = src[2];
 }
 
-function trianglesForQuad(vertices, dst, offset) {
-    copyVec3(vertices[0], dst, offset + 0 );
-    copyVec3(vertices[1], dst, offset + 3 );
-    copyVec3(vertices[2], dst, offset + 6 );
-    copyVec3(vertices[1], dst, offset + 9 );
-    copyVec3(vertices[2], dst, offset + 12);
-    copyVec3(vertices[3], dst, offset + 15);
-}
-
 /**
- * calculate a (normalized) face normal for the triangle with
- * the given vertices.
+ * add data for two triangles (6 vertices) to dst starting at offset
+ * vertices: array of 6 vec3's
+ * dst: flat array of vertex positions (e.g., to pass to gl.drawArrays
+ *      with GL.TRIANGLES)
  */
-function triangleFaceNormal(v1, v2, v3) {
-    var v12 = goog.vec.Vec3.create();
-    var v13 = goog.vec.Vec3.create();
-    goog.vec.Vec3.subtract(v2, v1, v12);
-    goog.vec.Vec3.subtract(v3, v1, v13);
-    var result = goog.vec.Vec3.create();
-    goog.vec.Vec3.cross(v12, v13, result);
-    goog.vec.Vec3.normalize(result, result);
-    return result;
+function trianglesForQuad(vertices, dst, offset) {
+    copyVec3(vertices[0], dst, offset + 0 ); // tri 1: top left
+    copyVec3(vertices[1], dst, offset + 3 ); // tri 1: top right
+    copyVec3(vertices[2], dst, offset + 6 ); // tri 1: bottom left
+    copyVec3(vertices[1], dst, offset + 9 ); // tri 2: top right
+    copyVec3(vertices[2], dst, offset + 12); // tri 2: bottom left
+    copyVec3(vertices[3], dst, offset + 15); // tri 2: bottom right
 }
 
 /**
@@ -182,18 +173,18 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
     var anchors = {
 	vertex: new Float32Array(3 * anchVertCount),
 	normal: new Float32Array(3 * anchVertCount),
-	// ideally, orgs would be an unsigned int (or short or byte) array,
+	// ideally, org would be an unsigned int (or short or byte) array,
 	// but GLSL (in webGL 1.0) doesn't allow those types for attributes
-	org: new Float32Array(anchVertCount)
+	org:    new Float32Array(anchVertCount)
     };
 
     var twistVertCount = 6 * numTwists;
     var twists = {
-	vertex: new Float32Array(3 * twistVertCount),
-        org: new Float32Array(twistVertCount),
-        sideVec: new Float32Array(3 * twistVertCount),
+	vertex:    new Float32Array(3 * twistVertCount),
+        sideVec:   new Float32Array(3 * twistVertCount),
         otherVert: new Float32Array(3 * twistVertCount),
-        otherOrg: new Float32Array(3 * twistVertCount)
+        otherOrg:  new Float32Array(3 * twistVertCount)
+        org:       new Float32Array(twistVertCount),
     };
 
     var curAnchor = 0;
@@ -229,10 +220,10 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
 	    //
 	    //       0            1
 	    //       |  oldAnchor |
-	    //       2            3
+	    //       2____________3
 	    //       /            /
 	    //      /    twist   /
-	    //     /            /
+	    //     /___________ /
 	    //    0            1
             //    |   anchor   |
 	    //    2            3
