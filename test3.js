@@ -5,6 +5,37 @@ goog.require("goog.debug.Logger");
 goog.require("goog.vec.Mat4");
 goog.require("goog.vec.Vec3");
 
+var vertShader = 
+    [
+	"uniform    mat4    transform;",
+	"uniform    mat4    cameraInverse;",
+	"uniform    mat4    cameraProjection;",
+
+	"attribute  vec3    vertex;",
+	"attribute  vec3    normal;",
+
+	//"varying    float   light;",
+
+	"void main(void) {",
+	//"  light = dot( normalize( mat3( transform[0].xyz, transform[1].xyz, transform[2].xyz ) * normals ), vec3( 0.0, 0.0, -1.0 ));",
+	"  gl_Position = cameraProjection * cameraInverse * transform * vec4( vertex, 1.0 );",
+	"}"
+    ].join( "\n" );
+
+var fragShader =
+    [
+	"#ifdef GL_ES",
+	"precision highp float;",
+	"#endif",		
+	
+	//"varying float light;",
+
+	"void main( void ) {",
+	//"gl_FragColor = texture2D( texture, uv ) * light;",
+	"  gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);",
+	"}"
+    ].join( "\n" );
+
 function Spinteny(container) {
     var container = goog.dom.getElement(container);
     var containerSize = goog.style.getSize(container);
@@ -35,12 +66,13 @@ function Spinteny(container) {
 		    new goog.vec.Vec3.createFromValues(0.0,
 						       -genomeHeight, 
 						       0.0),
-		    new goog.vec.Vec3.createFromValues(0.0, 0.0, 100.0)
+		    new goog.vec.Vec3.createFromValues(0.0, 0.0, 100.0),
+		    0
 		);
 	    }
 	);
     
-    var LCBs = [0].map(
+    var LCBs = [0, 1, 2, 3, 4].map(
 	    function(chrId) {
 		return [
 		    [
@@ -66,6 +98,36 @@ function Spinteny(container) {
 
     console.log(synVerts.anchors.vertex);
     console.log(synVerts.anchors.normal);
+
+    var anchorShaderInfo = {
+	vertexShader: vertShader,
+	fragmentShader: fragShader,
+
+	data: {
+	    // create uniform data
+
+	    transform: new GLOW.Matrix4(),
+	    cameraInverse: GLOW.defaultCamera.inverse,
+	    cameraProjection: GLOW.defaultCamera.projection,
+
+	    // create attribute data
+
+	    vertex: synVerts.anchors.vertex,
+	    normal: synVerts.anchors.normal
+	},
+	// create element data
+	primitives: GL.LINES
+    };
+
+    var anchors = new GLOW.Shader(anchorShaderInfo);
+
+    // Update the default camera position
+    GLOW.defaultCamera.localMatrix.setPosition( 0, 0, 500 );
+    GLOW.defaultCamera.update();
+
+    this.context.cache.clear();
+    this.context.clear();
+    anchors.draw();
 }
 
 function copyVec3(src, dst, offset) {
