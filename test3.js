@@ -7,17 +7,19 @@ goog.require("goog.vec.Vec3");
 
 var vertShader = 
     [
-	"uniform    mat4    transform;",
+	"uniform    mat4    orgTransforms[8];",
 	"uniform    mat4    cameraInverse;",
 	"uniform    mat4    cameraProjection;",
 
 	"attribute  vec3    vertex;",
 	"attribute  vec3    normal;",
+	"attribute  float   org;",
 
 	//"varying    float   light;",
 
 	"void main(void) {",
 	//"  light = dot( normalize( mat3( transform[0].xyz, transform[1].xyz, transform[2].xyz ) * normals ), vec3( 0.0, 0.0, -1.0 ));",
+	"  mat4 transform = orgTransforms[int(org)];",
 	"  gl_Position = cameraProjection * cameraInverse * transform * vec4( vertex, 1.0 );",
 	"}"
     ].join( "\n" );
@@ -48,10 +50,25 @@ function Spinteny(container) {
     this.context.setupClear( { red: 1, green: 1, blue: 1 } );
     container.appendChild(this.context.domElement);
 
-    this.genomeHeight = 100;
-    this.genomeSpacing = 5;
+    this.genomeHeight = 40;
+    this.genomeRadius = 300;
+    this.chromSpacing = Math.PI / 18;
+    
+    this.maxOrgs = 8;
+    this.orgTransformFlat = new Float32Array(16 * this.maxOrgs);
+    this.orgTransforms = [];
+    for (var i = 0; i < this.maxOrgs; i++) {
+	this.orgTransforms[i] =
+	    this.orgTransformFlat.subarray(i * 16, (i * 16) + 16);
+    }
+    
+    goog.vec.Mat4.makeIdentity(this.orgTransforms[0]);
+    goog.vec.Mat4.makeIdentity(this.orgTransforms[1]);
+    goog.vec.Mat4.translate(this.orgTransforms[0], 0, 70, 0);
+    goog.vec.Mat4.translate(this.orgTransforms[1], 0, -30, 0);
+    goog.vec.Mat4.rotateY(this.orgTransforms[1], Math.PI/18);
 
-    var genomeHeight = this.genomeHeight;
+    var thisObj = this;
     this.mappers = 
 	[0, 1, 2, 3].map(
 	    function(orgId) {
@@ -64,10 +81,10 @@ function Spinteny(container) {
 			{ start: 0, end: 10000, name: "e" }
 		    ],
 		    new goog.vec.Vec3.createFromValues(0.0,
-						       -genomeHeight, 
+						       -thisObj.genomeHeight, 
 						       0.0),
-		    new goog.vec.Vec3.createFromValues(0.0, 0.0, 200.0),
-		    Math.PI/18
+		    new goog.vec.Vec3.createFromValues(0.0, 0.0, thisObj.genomeRadius),
+		    thisObj.chromSpacing
 		);
 	    }
 	);
@@ -96,9 +113,6 @@ function Spinteny(container) {
 
     var synVerts = this.LCBsToVertices(joined);
 
-    console.log(synVerts.anchors.vertex);
-    console.log(synVerts.anchors.normal);
-
     var anchorShaderInfo = {
 	vertexShader: vertShader,
 	fragmentShader: fragShader,
@@ -106,8 +120,8 @@ function Spinteny(container) {
 	data: {
 	    // create uniform data
 
-	    transform: {
-		value: goog.vec.Mat4.makeIdentity(goog.vec.Mat4.createFloat32())
+	    orgTransforms: {
+		value: this.orgTransformFlat
 	    },
 	    cameraInverse: GLOW.defaultCamera.inverse,
 	    cameraProjection: GLOW.defaultCamera.projection,
@@ -115,7 +129,8 @@ function Spinteny(container) {
 	    // create attribute data
 
 	    vertex: synVerts.anchors.vertex,
-	    normal: synVerts.anchors.normal
+	    normal: synVerts.anchors.normal,
+	    org: synVerts.anchors.org
 	},
 	// create element data
 	primitives: GL.LINE_STRIP
