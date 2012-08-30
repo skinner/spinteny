@@ -20,6 +20,7 @@ function Spinteny(container) {
     this.genomeHeight = 100;
     this.genomeSpacing = 5;
 
+    var genomeHeight = this.genomeHeight;
     this.mappers = 
 	[0, 1, 2, 3].map(
 	    function(orgId) {
@@ -32,13 +33,13 @@ function Spinteny(container) {
 			{ start: 0, end: 10000, name: "e" }
 		    ],
 		    new goog.vec.Vec3.createFromValues(0.0,
-						       -this.genomeHeight, 
+						       -genomeHeight, 
 						       0.0),
 		    new goog.vec.Vec3.createFromValues(0.0, 0.0, 100.0)
 		);
 	    }
 	);
-
+    
     var LCBs = [0].map(
 	    function(chrId) {
 		return [
@@ -63,7 +64,8 @@ function Spinteny(container) {
 
     var synVerts = this.LCBsToVertices(joined);
 
-    console.log(synVerts);
+    console.log(synVerts.anchors.vertex);
+    console.log(synVerts.anchors.normal);
 }
 
 function copyVec3(src, dst, offset) {
@@ -74,14 +76,17 @@ function copyVec3(src, dst, offset) {
 
 /**
  * add data for two triangles (6 vertices) to dst starting at offset
- * vertices: array of 6 vec3's
+ * vertices: array of 4 vec3's, in the order
+ *           [top left, top right, bottom left, bottom right]
  * dst: flat array of vertex positions (e.g., to pass to gl.drawArrays
  *      with GL.TRIANGLES)
  */
 function trianglesForQuad(vertices, dst, offset) {
+    // triangles wind counterclockwise (if you're looking at them from
+    // outside the mesh), which is what calcArrayFaceNormals expects
     copyVec3(vertices[0], dst, offset + 0 ); // tri 1: top left
-    copyVec3(vertices[1], dst, offset + 3 ); // tri 1: top right
-    copyVec3(vertices[2], dst, offset + 6 ); // tri 1: bottom left
+    copyVec3(vertices[2], dst, offset + 3 ); // tri 1: bottom left
+    copyVec3(vertices[1], dst, offset + 6 ); // tri 1: top right
     copyVec3(vertices[1], dst, offset + 9 ); // tri 2: top right
     copyVec3(vertices[2], dst, offset + 12); // tri 2: bottom left
     copyVec3(vertices[3], dst, offset + 15); // tri 2: bottom right
@@ -256,16 +261,16 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
 	    // the top vertices of the twist are for the previous org,
 	    // and the bottom vertices of the twist are for the current org
 	    twists.org[curTwist * 6 + 0] = prevOrg; // top left
-	    twists.org[curTwist * 6 + 1] = prevOrg; // top right
-	    twists.org[curTwist * 6 + 2] = org;     // bottom left
+	    twists.org[curTwist * 6 + 1] = org;     // bottom left
+	    twists.org[curTwist * 6 + 2] = prevOrg; // top right
 	    twists.org[curTwist * 6 + 3] = prevOrg; // top right
 	    twists.org[curTwist * 6 + 4] = org;     // bottom left
 	    twists.org[curTwist * 6 + 5] = org;     // bottom right
 	    // and the twists.otherOrg values are the inverse of
 	    // the twists.org values
 	    twists.otherOrg[curTwist * 6 + 0] = org;
-	    twists.otherOrg[curTwist * 6 + 1] = org;
-	    twists.otherOrg[curTwist * 6 + 2] = prevOrg;
+	    twists.otherOrg[curTwist * 6 + 1] = prevOrg;
+	    twists.otherOrg[curTwist * 6 + 2] = org;
 	    twists.otherOrg[curTwist * 6 + 3] = org;
 	    twists.otherOrg[curTwist * 6 + 4] = prevOrg;
 	    twists.otherOrg[curTwist * 6 + 5] = prevOrg;
@@ -273,19 +278,19 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
 	    var sideVec = goog.vec.Vec3.create();
 	    goog.vec.Vec3.subtract(twistVerts[0], twistVerts[1], sideVec);
 	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 0); // TL
-	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 3); // TR
+	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 6); // TR
 	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 9); // TR
 
 	    copyVec3(twistVerts[2], twists.otherVert, curTwist * 18 + 0);
-	    copyVec3(twistVerts[3], twists.otherVert, curTwist * 18 + 3);
+	    copyVec3(twistVerts[3], twists.otherVert, curTwist * 18 + 6);
 	    copyVec3(twistVerts[3], twists.otherVert, curTwist * 18 + 9);
 
 	    goog.vec.Vec3.subtract(twistVerts[2], twistVerts[3], sideVec);
-	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 6);  // BL
+	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 3);  // BL
 	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 12); // BL
 	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 15); // BR
 	    
-	    copyVec3(twistVerts[0], twists.otherVert, curTwist * 18 + 6);
+	    copyVec3(twistVerts[0], twists.otherVert, curTwist * 18 + 3);
 	    copyVec3(twistVerts[0], twists.otherVert, curTwist * 18 + 12);
 	    copyVec3(twistVerts[1], twists.otherVert, curTwist * 18 + 15);
 	    
