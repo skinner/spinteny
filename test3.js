@@ -66,8 +66,8 @@ function Spinteny(container) {
 		    new goog.vec.Vec3.createFromValues(0.0,
 						       -genomeHeight, 
 						       0.0),
-		    new goog.vec.Vec3.createFromValues(0.0, 0.0, 100.0),
-		    0
+		    new goog.vec.Vec3.createFromValues(0.0, 0.0, 200.0),
+		    Math.PI/18
 		);
 	    }
 	);
@@ -106,7 +106,9 @@ function Spinteny(container) {
 	data: {
 	    // create uniform data
 
-	    transform: new GLOW.Matrix4(),
+	    transform: {
+		value: goog.vec.Mat4.makeIdentity(goog.vec.Mat4.createFloat32())
+	    },
 	    cameraInverse: GLOW.defaultCamera.inverse,
 	    cameraProjection: GLOW.defaultCamera.projection,
 
@@ -116,7 +118,7 @@ function Spinteny(container) {
 	    normal: synVerts.anchors.normal
 	},
 	// create element data
-	primitives: GL.LINES
+	primitives: GL.LINE_STRIP
     };
 
     var anchors = new GLOW.Shader(anchorShaderInfo);
@@ -419,6 +421,10 @@ CylMapper.prototype.toSpatial = function(index, base, distance) {
 	    / this.totalLength )
 	  * ( 2 * Math.PI ) )
 	+ (this.padding * index);
+    // scale the angle down to leave room for padding
+    angle *= ( (2 * Math.PI)
+	       / ( (2 * Math.PI) 
+		   + ( this.padding * ( this.chroms.length ) ) ) );
     var rotM = goog.vec.Mat4.makeRotate(goog.vec.Mat4.createFloat32(),
 					angle,
 					this.rotAxis[0],
