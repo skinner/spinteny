@@ -14,11 +14,12 @@ var vertShader =
 	"attribute  vec3    vertex;",
 	"attribute  vec3    normal;",
 	"attribute  float   org;",
+	"attribute  vec3    center;",
 
-	//"varying    float   light;",
+	"varying vec3 vCenter;",
 
 	"void main(void) {",
-	//"  light = dot( normalize( mat3( transform[0].xyz, transform[1].xyz, transform[2].xyz ) * normals ), vec3( 0.0, 0.0, -1.0 ));",
+	"  vCenter = center;",
 	"  mat4 transform = orgTransforms[int(org)];",
 	"  gl_Position = cameraProjection * cameraInverse * transform * vec4( vertex, 1.0 );",
 	"}"
@@ -30,11 +31,15 @@ var fragShader =
 	"precision highp float;",
 	"#endif",		
 	
-	//"varying float light;",
+	"varying vec3 vCenter;",
 
-	"void main( void ) {",
-	//"gl_FragColor = texture2D( texture, uv ) * light;",
-	"  gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);",
+	"void main() {",
+	"    const float epsilon = 0.01;",
+	"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
+	"        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);",
+	"    } else {",
+	"        gl_FragColor = vec4(0.5, 0.5, 0.5, 0.7);",
+	"    }",
 	"}"
     ].join( "\n" );
 
@@ -47,11 +52,11 @@ function Spinteny(container) {
 	height: containerSize.height
     });
 
-    this.context.setupClear( { red: 1, green: 1, blue: 1 } );
+    this.context.setupClear( { red: 1, green: 1, blue: 1, alpha: 1 } );
     container.appendChild(this.context.domElement);
 
     this.genomeHeight = 40;
-    this.genomeRadius = 300;
+    this.genomeRadius = 200;
     this.chromSpacing = Math.PI / 18;
     
     this.maxOrgs = 8;
@@ -64,9 +69,9 @@ function Spinteny(container) {
     
     goog.vec.Mat4.makeIdentity(this.orgTransforms[0]);
     goog.vec.Mat4.makeIdentity(this.orgTransforms[1]);
-    goog.vec.Mat4.translate(this.orgTransforms[0], 0, 70, 0);
-    goog.vec.Mat4.translate(this.orgTransforms[1], 0, -30, 0);
-    goog.vec.Mat4.rotateY(this.orgTransforms[1], Math.PI/18);
+    goog.vec.Mat4.translate(this.orgTransforms[0], 0, 60, 0);
+    goog.vec.Mat4.translate(this.orgTransforms[1], 0, -20, 0);
+    goog.vec.Mat4.rotateY(this.orgTransforms[1], Math.PI/30);
 
     var thisObj = this;
     this.mappers = 
@@ -78,7 +83,9 @@ function Spinteny(container) {
 			{ start: 0, end: 10000, name: "b" },
 			{ start: 0, end: 10000, name: "c" },
 			{ start: 0, end: 10000, name: "d" },
-			{ start: 0, end: 10000, name: "e" }
+			{ start: 0, end: 10000, name: "e" },
+			{ start: 0, end: 10000, name: "f" },
+			{ start: 0, end: 10000, name: "g" }
 		    ],
 		    new goog.vec.Vec3.createFromValues(0.0,
 						       -thisObj.genomeHeight, 
@@ -89,7 +96,7 @@ function Spinteny(container) {
 	    }
 	);
     
-    var LCBs = [0, 1, 2, 3, 4].map(
+    var LCBs = [0, 1, 2, 3, 4, 5, 6].map(
 	    function(chrId) {
 		return [
 		    [
@@ -113,38 +120,86 @@ function Spinteny(container) {
 
     var synVerts = this.LCBsToVertices(joined);
 
+    var camera = new GLOW.Camera({
+	aspect: containerSize.width / containerSize.height
+    });
+
     var anchorShaderInfo = {
 	vertexShader: vertShader,
 	fragmentShader: fragShader,
 
 	data: {
-	    // create uniform data
+	    // uniforms
 
 	    orgTransforms: {
 		value: this.orgTransformFlat
 	    },
-	    cameraInverse: GLOW.defaultCamera.inverse,
-	    cameraProjection: GLOW.defaultCamera.projection,
+	    cameraInverse: camera.inverse,
+	    cameraProjection: camera.projection,
 
-	    // create attribute data
+	    // attributes
 
 	    vertex: synVerts.anchors.vertex,
 	    normal: synVerts.anchors.normal,
-	    org: synVerts.anchors.org
+	    org: synVerts.anchors.org,
+	    center: triangleBarycenters(synVerts.anchors.vertex.length)
 	},
-	// create element data
-	primitives: GL.LINE_STRIP
+	primitives: GL.TRIANGLES
     };
 
+    var twistShaderInfo = {
+	vertexShader: vertShader,
+	fragmentShader: fragShader,
+
+	data: {
+	    // uniforms
+
+	    orgTransforms: {
+		value: this.orgTransformFlat
+	    },
+	    cameraInverse: camera.inverse,
+	    cameraProjection: camera.projection,
+
+	    // attributes
+
+	    vertex: synVerts.twists.vertex,
+	    normal: synVerts.twists.normal,
+	    org: synVerts.twists.org,
+	    center: triangleBarycenters(synVerts.twists.vertex.length)
+	},
+	primitives: GL.TRIANGLES
+    };
+
+    this.context.enableCulling(false);
+    this.context.enableBlend(true, {
+	src: GL.SRC_ALPHA,
+	dst: GL.ONE_MINUS_SRC_ALPHA
+	//dst: GL.ONE
+    });
+    this.context.enableDepthTest(false);
+
     var anchors = new GLOW.Shader(anchorShaderInfo);
+    var twists = new GLOW.Shader(twistShaderInfo);
 
     // Update the default camera position
-    GLOW.defaultCamera.localMatrix.setPosition( 0, 0, 500 );
-    GLOW.defaultCamera.update();
+    camera.localMatrix.setPosition( 0, 0, 400 );
+    camera.update();
 
     this.context.cache.clear();
     this.context.clear();
     anchors.draw();
+    twists.draw();
+}
+
+function triangleBarycenters(length) {
+    var centers = new Float32Array([1, 0, 0,
+				    0, 1, 0,
+				    0, 0, 1]);
+    var allCenters = new Float32Array(length);
+    for (var i = 0; i < length; i += 9) {
+	allCenters.set(centers, i);
+    }
+    return allCenters;
 }
 
 /**
