@@ -1,16 +1,23 @@
 goog.require("goog.asserts");
 goog.require("goog.dom");
+goog.require("goog.style");
 goog.require("goog.debug.Logger");
 goog.require("goog.vec.Mat4");
 goog.require("goog.vec.Vec3");
 
 function Spinteny(container) {
     var container = goog.dom.getElement(container);
-    this.context = new GLOW.Context();
+    var containerSize = goog.style.getSize(container);
+
+    this.context = new GLOW.Context({
+	width: containerSize.width,
+	height: containerSize.height
+    });
+
     this.context.setupClear( { red: 1, green: 1, blue: 1 } );
     container.appendChild(this.context.domElement);
 
-    this.anchorHeight = 10;
+    this.genomeHeight = 100;
     this.genomeSpacing = 5;
 
     this.mappers = 
@@ -24,26 +31,28 @@ function Spinteny(container) {
 			{ start: 0, end: 10000, name: "d" },
 			{ start: 0, end: 10000, name: "e" }
 		    ],
-		    new goog.vec.Vec3.createFromValues(0.0, -1.0, 0.0),
-		    new goog.vec.Vec3.createFromValues(0.0, 0.0, -1.0)
+		    new goog.vec.Vec3.createFromValues(0.0,
+						       -this.genomeHeight, 
+						       0.0),
+		    new goog.vec.Vec3.createFromValues(0.0, 0.0, 100.0)
 		);
 	    }
 	);
 
-    var LCBs = [0, 1, 2, 3, 4].map(
+    var LCBs = [0].map(
 	    function(chrId) {
 		return [
 		    [
 			[0, chrId, 0, 4000],
-			[1, chrId, 0, 4000],
-			[2, chrId, 0, 4000],
-			[3, chrId, 0, 4000],
+			[1, chrId, 0, 4000]
+			//[2, chrId, 0, 4000],
+			//[3, chrId, 0, 4000],
 		    ],
 		    [
 			[0, chrId, 6000, 10000],
-			[1, chrId, 6000, 10000],
-			[2, chrId, 6000, 10000],
-			[3, chrId, 6000, 10000],
+			[1, chrId, 6000, 10000]
+			//[2, chrId, 6000, 10000],
+			//[3, chrId, 6000, 10000],
 		    ]
 		];
 	    }
@@ -53,7 +62,7 @@ function Spinteny(container) {
     }, []);
 
     var synVerts = this.LCBsToVertices(joined);
-    
+
     console.log(synVerts);
 }
 
@@ -90,6 +99,13 @@ function calcArrayFaceNormals(src, dst) {
     var v12 = goog.vec.Vec3.create();
     var v13 = goog.vec.Vec3.create();
     for (var i = 0; i < src.length; i += 9) {
+	// hmm, the goog.vec.Vec3 API doesn't do quite what I want here
+	// (which is to treat a 3-element slice from src as its
+	// own vec3), so I'm doing some math myself
+	// (should I do all the calculation here or use
+	//  Vec3.{cross,normalize}?  I'm allocating more in
+	//  this loop than I strictly have to)
+	// use subarray?  still allocates a JS obj, right?
 	v12[0] = src[i + 3] - src[i + 0];
 	v12[1] = src[i + 4] - src[i + 1];
 	v12[2] = src[i + 5] - src[i + 2];
@@ -115,6 +131,10 @@ function repeat(val, dst, offset, count) {
  * and returns a quadrilateral that covers that region of the
  * spinteny cylinder in the form of an array of four vec3's:
  * [topStart, topEnd, botStart, botEnd]
+ *
+ * the current convention is that each org's drawing area has
+ * top at 0 and bottom at 1, which will get transformed by that org's
+ * transformation matrix in the vertex shader
  */
 Spinteny.prototype.matchToQuad = function(match) {
     return [
@@ -183,8 +203,8 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
 	vertex:    new Float32Array(3 * twistVertCount),
         sideVec:   new Float32Array(3 * twistVertCount),
         otherVert: new Float32Array(3 * twistVertCount),
-        otherOrg:  new Float32Array(3 * twistVertCount)
-        org:       new Float32Array(twistVertCount),
+        otherOrg:  new Float32Array(3 * twistVertCount),
+        org:       new Float32Array(twistVertCount)
     };
 
     var curAnchor = 0;
@@ -291,6 +311,13 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
  */
 function CylMapper(chroms, axis, origin, padding) {
     this.axis = axis;
+    this.rotAxis = goog.vec.Vec3.normalize(axis,
+					   goog.vec.Vec3.createFloat32());
+    // the rotations done by this mapper are left-handed, i.e., 
+    // in toSpatial, positive distance is downward, and
+    // positive rotations go counterclockwise if you're looking
+    // at the circle from above
+    goog.vec.Vec3.negate(this.rotAxis, this.rotAxis);
     this.origin = origin;
     // default padding of 5 degrees
     this.padding = (padding === undefined) ? Math.PI/36 : padding;
@@ -325,15 +352,16 @@ CylMapper.prototype.toSpatial = function(index, base, distance) {
 	    / this.totalLength )
 	  * ( 2 * Math.PI ) )
 	+ (this.padding * index);
-    var rotM = goog.vec.Mat4.makeRotate(goog.vec.Mat4.create(), angle,
-					this.axis[0],
-					this.axis[1],
-					this.axis[2]);
-    var result = goog.vec.Vec3.create();
-    goog.vec.Mat4.multVec3(rotM, this.origin, result);
+    var rotM = goog.vec.Mat4.makeRotate(goog.vec.Mat4.createFloat32(),
+					angle,
+					this.rotAxis[0],
+					this.rotAxis[1],
+					this.rotAxis[2]);
+    var result = goog.vec.Vec3.createFloat32();
+    goog.vec.Mat4.multVec3NoTranslate(rotM, this.origin, result);
 
     if (0 != distance) {
-	var distVec = goog.vec.Vec3.create();
+	var distVec = goog.vec.Vec3.createFloat32();
 	goog.vec.Vec3.scale(this.axis, distance, distVec);
 	goog.vec.Vec3.add(result, distVec, result);
     }
