@@ -147,12 +147,6 @@ function Spinteny(container) {
     anchors.draw();
 }
 
-function copyVec3(src, dst, offset) {
-    dst[offset + 0] = src[0];
-    dst[offset + 1] = src[1];
-    dst[offset + 2] = src[2];
-}
-
 /**
  * add data for two triangles (6 vertices) to dst starting at offset
  * vertices: array of 4 vec3's, in the order
@@ -163,12 +157,12 @@ function copyVec3(src, dst, offset) {
 function trianglesForQuad(vertices, dst, offset) {
     // triangles wind counterclockwise (if you're looking at them from
     // outside the mesh), which is what calcArrayFaceNormals expects
-    copyVec3(vertices[0], dst, offset + 0 ); // tri 1: top left
-    copyVec3(vertices[2], dst, offset + 3 ); // tri 1: bottom left
-    copyVec3(vertices[1], dst, offset + 6 ); // tri 1: top right
-    copyVec3(vertices[1], dst, offset + 9 ); // tri 2: top right
-    copyVec3(vertices[2], dst, offset + 12); // tri 2: bottom left
-    copyVec3(vertices[3], dst, offset + 15); // tri 2: bottom right
+    dst.set(vertices[0], offset + 0 ); // tri 1: top left
+    dst.set(vertices[2], offset + 3 ); // tri 1: bottom left
+    dst.set(vertices[1], offset + 6 ); // tri 1: top right
+    dst.set(vertices[1], offset + 9 ); // tri 2: top right
+    dst.set(vertices[2], offset + 12); // tri 2: bottom left
+    dst.set(vertices[3], offset + 15); // tri 2: bottom right
 }
 
 /**
@@ -182,26 +176,21 @@ function calcArrayFaceNormals(src, dst) {
 
     var v12 = goog.vec.Vec3.create();
     var v13 = goog.vec.Vec3.create();
+    var result = goog.vec.Vec3.create();
     for (var i = 0; i < src.length; i += 9) {
-	// hmm, the goog.vec.Vec3 API doesn't do quite what I want here
-	// (which is to treat a 3-element slice from src as its
-	// own vec3), so I'm doing some math myself
-	// (should I do all the calculation here or use
-	//  Vec3.{cross,normalize}?  I'm allocating more in
-	//  this loop than I strictly have to)
-	// use subarray?  still allocates a JS obj, right?
+	// doing some math myself here rather than using a lib
+	// function in order to avoid allocating
 	v12[0] = src[i + 3] - src[i + 0];
 	v12[1] = src[i + 4] - src[i + 1];
 	v12[2] = src[i + 5] - src[i + 2];
 	v13[0] = src[i + 6] - src[i + 0];
 	v13[1] = src[i + 7] - src[i + 1];
 	v13[2] = src[i + 8] - src[i + 2];
-	var result = goog.vec.Vec3.create();
 	goog.vec.Vec3.cross(v12, v13, result);
 	goog.vec.Vec3.normalize(result, result);
-	copyVec3(result, dst, i + 0);
-	copyVec3(result, dst, i + 3);
-	copyVec3(result, dst, i + 6);
+	dst.set(result, i + 0);
+	dst.set(result, i + 3);
+	dst.set(result, i + 6);
     }
 }
 
@@ -294,7 +283,8 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
     var curAnchor = 0;
     var curTwist = 0;
     var topStart, topEnd, botStart, botEnd;
-    var orgId = 0, chrId = 1, start = 2, end = 3; 
+    var orgId = 0, chrId = 1, start = 2, end = 3;
+    var sideVec = goog.vec.Vec3.create();
 
     for (var blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
 	var block = blocks[blockIdx];
@@ -354,25 +344,24 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
 	    twists.otherOrg[curTwist * 6 + 4] = prevOrg;
 	    twists.otherOrg[curTwist * 6 + 5] = prevOrg;
 
-	    var sideVec = goog.vec.Vec3.create();
 	    goog.vec.Vec3.subtract(twistVerts[0], twistVerts[1], sideVec);
-	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 0); // TL
-	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 6); // TR
-	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 9); // TR
+	    twists.sideVec.set(sideVec, curTwist * 18 + 0); // top left
+	    twists.sideVec.set(sideVec, curTwist * 18 + 6); // top right
+	    twists.sideVec.set(sideVec, curTwist * 18 + 9); // top right
 
-	    copyVec3(twistVerts[2], twists.otherVert, curTwist * 18 + 0);
-	    copyVec3(twistVerts[3], twists.otherVert, curTwist * 18 + 6);
-	    copyVec3(twistVerts[3], twists.otherVert, curTwist * 18 + 9);
+	    twists.otherVert.set(twistVerts[2], curTwist * 18 + 0);
+	    twists.otherVert.set(twistVerts[3], curTwist * 18 + 6);
+	    twists.otherVert.set(twistVerts[3], curTwist * 18 + 9);
 
 	    goog.vec.Vec3.subtract(twistVerts[2], twistVerts[3], sideVec);
-	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 3);  // BL
-	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 12); // BL
-	    copyVec3(sideVec, twists.sideVec, curTwist * 18 + 15); // BR
-	    
-	    copyVec3(twistVerts[0], twists.otherVert, curTwist * 18 + 3);
-	    copyVec3(twistVerts[0], twists.otherVert, curTwist * 18 + 12);
-	    copyVec3(twistVerts[1], twists.otherVert, curTwist * 18 + 15);
-	    
+	    twists.sideVec.set(sideVec, curTwist * 18 + 3);  // bottom left
+	    twists.sideVec.set(sideVec, curTwist * 18 + 12); // bottom left
+	    twists.sideVec.set(sideVec, curTwist * 18 + 15); // bottom right
+
+	    twists.otherVert.set(twistVerts[0], curTwist * 18 + 3);
+	    twists.otherVert.set(twistVerts[0], curTwist * 18 + 12);
+	    twists.otherVert.set(twistVerts[1], curTwist * 18 + 15);
+
 	    curTwist++;
 
 	    trianglesForQuad(anchorVerts, anchors.vertex, curAnchor * 18);
