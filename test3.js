@@ -31,14 +31,19 @@ var fragShader =
 	"precision highp float;",
 	"#endif",		
 	
-	"varying vec3 vCenter;",
+	"uniform    vec2    fogRange;",
+
+	"varying    vec3    vCenter;",
 
 	"void main() {",
 	"    const float epsilon = 0.01;",
+	"    float z = gl_FragCoord.z / gl_FragCoord.w;",
+	"    float a = (fogRange.y - z) / (fogRange.y - fogRange.x);",
+	"    a = clamp(a, 0.0, 1.0);",
 	"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
-	"        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);",
+	"        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0 * a);",
 	"    } else {",
-	"        gl_FragColor = vec4(0.5, 0.5, 0.5, 0.7);",
+	"        gl_FragColor = vec4(0.2, 0.2, 0.2, 0.4 * a);",
 	"    }",
 	"}"
     ].join( "\n" );
@@ -71,7 +76,7 @@ function Spinteny(container) {
     goog.vec.Mat4.makeIdentity(this.orgTransforms[1]);
     goog.vec.Mat4.translate(this.orgTransforms[0], 0, 60, 0);
     goog.vec.Mat4.translate(this.orgTransforms[1], 0, -20, 0);
-    goog.vec.Mat4.rotateY(this.orgTransforms[1], Math.PI/30);
+    goog.vec.Mat4.rotateY(this.orgTransforms[1], Math.PI/2);
 
     var thisObj = this;
     this.mappers = 
@@ -124,6 +129,8 @@ function Spinteny(container) {
 	aspect: containerSize.width / containerSize.height
     });
 
+    var fogRange = new Float32Array([350, 700]);
+
     var anchorShaderInfo = {
 	vertexShader: vertShader,
 	fragmentShader: fragShader,
@@ -136,6 +143,7 @@ function Spinteny(container) {
 	    },
 	    cameraInverse: camera.inverse,
 	    cameraProjection: camera.projection,
+	    fogRange: { value: fogRange},
 
 	    // attributes
 
@@ -159,6 +167,7 @@ function Spinteny(container) {
 	    },
 	    cameraInverse: camera.inverse,
 	    cameraProjection: camera.projection,
+	    fogRange: { value: fogRange},
 
 	    // attributes
 
@@ -170,18 +179,14 @@ function Spinteny(container) {
 	primitives: GL.TRIANGLES
     };
 
-    this.context.enableCulling(false);
-    this.context.enableBlend(true, {
-	src: GL.SRC_ALPHA,
-	dst: GL.ONE_MINUS_SRC_ALPHA
-	//dst: GL.ONE
-    });
-    this.context.enableDepthTest(false);
-
     var anchors = new GLOW.Shader(anchorShaderInfo);
     var twists = new GLOW.Shader(twistShaderInfo);
 
-    // Update the default camera position
+    GL.disable(GL.CULL_FACE);
+    GL.enable(GL.BLEND);
+    GL.blendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA);
+    GL.disable(GL.DEPTH_TEST);
+
     camera.localMatrix.setPosition( 0, 0, 400 );
     camera.update();
 
