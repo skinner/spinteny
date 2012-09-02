@@ -1,7 +1,8 @@
 goog.require("goog.asserts");
 goog.require("goog.dom");
-goog.require("goog.style");
 goog.require("goog.debug.Logger");
+goog.require("goog.events");
+goog.require("goog.style");
 goog.require("goog.vec.Mat4");
 goog.require("goog.vec.Vec3");
 
@@ -49,8 +50,8 @@ var fragShader =
     ].join( "\n" );
 
 function Spinteny(container) {
-    var container = goog.dom.getElement(container);
-    var containerSize = goog.style.getSize(container);
+    this. container = goog.dom.getElement(container);
+    var containerSize = goog.style.getSize(this.container);
 
     this.context = new GLOW.Context({
 	width: containerSize.width,
@@ -58,11 +59,16 @@ function Spinteny(container) {
     });
 
     this.context.setupClear( { red: 1, green: 1, blue: 1, alpha: 1 } );
-    container.appendChild(this.context.domElement);
+    this.container.appendChild(this.context.domElement);
 
-    this.genomeHeight = 40;
+    this.genomeCount = 2;
+    this.totalHeight = 160; //arbitrary, related to camera FOV and distance
+    this.genomeHeight = this.totalHeight / (this.genomeCount * 2);
+
     this.genomeRadius = 200;
     this.chromSpacing = Math.PI / 18;
+
+    this.cameraDistance = 400;
     
     this.maxOrgs = 8;
     this.orgTransformFlat = new Float32Array(16 * this.maxOrgs);
@@ -74,8 +80,16 @@ function Spinteny(container) {
     
     goog.vec.Mat4.makeIdentity(this.orgTransforms[0]);
     goog.vec.Mat4.makeIdentity(this.orgTransforms[1]);
-    goog.vec.Mat4.translate(this.orgTransforms[0], 0, 60, 0);
-    goog.vec.Mat4.translate(this.orgTransforms[1], 0, -20, 0);
+    for (var i = 0; i <= this.genomeCount; i++) {
+	goog.vec.Mat4.translate(this.orgTransforms[i], 0,
+				(this.totalHeight / 2) 
+				- (i * 2 * this.genomeHeight)
+				- (this.genomeHeight / 2),
+				0);
+    }
+	
+    //goog.vec.Mat4.translate(this.orgTransforms[0], 0, 60, 0);
+    //goog.vec.Mat4.translate(this.orgTransforms[1], 0, -20, 0);
     goog.vec.Mat4.rotateY(this.orgTransforms[1], Math.PI/2);
 
     var thisObj = this;
@@ -129,7 +143,7 @@ function Spinteny(container) {
 	aspect: containerSize.width / containerSize.height
     });
 
-    var fogRange = new Float32Array([350, 700]);
+    var fogRange = new Float32Array([350, 900]);
 
     var anchorShaderInfo = {
 	vertexShader: vertShader,
@@ -179,22 +193,70 @@ function Spinteny(container) {
 	primitives: GL.TRIANGLES
     };
 
-    var anchors = new GLOW.Shader(anchorShaderInfo);
-    var twists = new GLOW.Shader(twistShaderInfo);
+    this.anchors = new GLOW.Shader(anchorShaderInfo);
+    this.twists = new GLOW.Shader(twistShaderInfo);
 
     GL.disable(GL.CULL_FACE);
     GL.enable(GL.BLEND);
     GL.blendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA);
     GL.disable(GL.DEPTH_TEST);
 
-    camera.localMatrix.setPosition( 0, 0, 400 );
+    camera.localMatrix.setPosition(0, 0, this.cameraDistance);
     camera.update();
 
     this.context.cache.clear();
     this.context.clear();
-    anchors.draw();
-    twists.draw();
+    this.anchors.draw();
+    this.twists.draw();
+
+    this.eventHandlers = {};
+    this.setDragHandler();
 }
+
+Spinteny.prototype.setDragHandler = function() {
+    this.eventHandlers.mousedown = 
+	goog.events.listen(this.container, "mousedown",
+			   this.startDrag, false, this);
+};
+
+Spinteny.prototype.startDrag = function(event) {
+    this.dragStart = goog.style.getClientPosition(event);
+    this.genomeClicked =
+	Math.floor( ( ( this.dragStart.y 
+			- goog.style.getClientPosition(this.container).y )
+		      / (this.totalHeight * 2.6) )
+		    * (this.genomeCount) ); //TODO: actually do this right
+    this.startingTransform = new Float32Array(16);
+    this.startingTransform.set(this.orgTransforms[this.genomeClicked]);
+    this.eventHandlers.mouseup = 
+	goog.events.listen(this.container, "mouseup",
+			   this.endDrag, false, this);
+    this.eventHandlers.mouseout = 
+	goog.events.listen(this.container, "mouseout",
+			   this.endDrag, false, this);
+    this.eventHandlers.mousemove = 
+	goog.events.listen(this.container, "mousemove",
+			   this.dragMove, false, this);
+};
+
+Spinteny.prototype.endDrag = function() {
+    goog.events.unlistenByKey(this.eventHandlers.mousemove);
+    goog.events.unlistenByKey(this.eventHandlers.mouseup);
+    goog.events.unlistenByKey(this.eventHandlers.mouseout);
+};
+
+Spinteny.prototype.dragMove = function(event) {
+    var clientPos = goog.style.getClientPosition(event);
+    var clientDeltaX = clientPos.x - this.dragStart.x;
+    var angle = Math.atan(clientDeltaX / this.cameraDistance);
+    this.orgTransforms[this.genomeClicked].set(this.startingTransform);
+    goog.vec.Mat4.rotateY(this.orgTransforms[this.genomeClicked], angle);
+    
+    this.context.cache.clear();
+    this.context.clear();
+    this.anchors.draw();
+    this.twists.draw();
+};
 
 function triangleBarycenters(length) {
     var centers = new Float32Array([1, 0, 0,
