@@ -40,7 +40,7 @@ var fragShader =
 	"    const float epsilon = 0.01;",
 	"    float z = gl_FragCoord.z / gl_FragCoord.w;",
 	"    float a = (fogRange.y - z) / (fogRange.y - fogRange.x);",
-	"    a = clamp(a, 0.0, 1.0);",
+	"    a = pow(clamp(a, 0.0, 1.0), 3.0);",
 	"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
 	"        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0 * a);",
 	"    } else {",
@@ -50,18 +50,18 @@ var fragShader =
     ].join( "\n" );
 
 function Spinteny(container) {
-    this. container = goog.dom.getElement(container);
-    var containerSize = goog.style.getSize(this.container);
+    this.container = goog.dom.getElement(container);
+    this.containerSize = goog.style.getSize(this.container);
 
     this.context = new GLOW.Context({
-	width: containerSize.width,
-	height: containerSize.height
+	width: this.containerSize.width,
+	height: this.containerSize.height
     });
 
     this.context.setupClear( { red: 1, green: 1, blue: 1, alpha: 1 } );
     this.container.appendChild(this.context.domElement);
 
-    this.genomeCount = 2;
+    this.genomeCount = 3;
     this.totalHeight = 160; //arbitrary, related to camera FOV and distance
     this.genomeHeight = this.totalHeight / (this.genomeCount * 2);
 
@@ -70,42 +70,39 @@ function Spinteny(container) {
 
     this.cameraDistance = 400;
     
-    this.maxOrgs = 8;
-    this.orgTransformFlat = new Float32Array(16 * this.maxOrgs);
+    this.orgTransformFlat = new Float32Array(16 * this.genomeCount);
     this.orgTransforms = [];
-    for (var i = 0; i < this.maxOrgs; i++) {
+    for (var i = 0; i < this.genomeCount; i++) {
 	this.orgTransforms[i] =
 	    this.orgTransformFlat.subarray(i * 16, (i * 16) + 16);
-    }
-    
-    goog.vec.Mat4.makeIdentity(this.orgTransforms[0]);
-    goog.vec.Mat4.makeIdentity(this.orgTransforms[1]);
-    for (var i = 0; i <= this.genomeCount; i++) {
+
+	goog.vec.Mat4.makeIdentity(this.orgTransforms[i]);
+
 	goog.vec.Mat4.translate(this.orgTransforms[i], 0,
 				(this.totalHeight / 2) 
 				- (i * 2 * this.genomeHeight)
 				- (this.genomeHeight / 2),
 				0);
     }
-	
-    //goog.vec.Mat4.translate(this.orgTransforms[0], 0, 60, 0);
-    //goog.vec.Mat4.translate(this.orgTransforms[1], 0, -20, 0);
-    goog.vec.Mat4.rotateY(this.orgTransforms[1], Math.PI/2);
+    	
+    goog.vec.Mat4.rotateY(this.orgTransforms[1], Math.PI/18);
 
     var thisObj = this;
+    var dummyChroms = [
+	{ start: 0, end: 10000, name: "a" },
+	{ start: 0, end: 10000, name: "b" },
+	{ start: 0, end: 10000, name: "c" },
+	{ start: 0, end: 10000, name: "d" },
+	{ start: 0, end: 10000, name: "e" },
+	{ start: 0, end: 10000, name: "f" },
+	{ start: 0, end: 10000, name: "g" }
+    ];
+
     this.mappers = 
 	[0, 1, 2, 3].map(
 	    function(orgId) {
 		return new CylMapper(
-		    [
-			{ start: 0, end: 10000, name: "a" },
-			{ start: 0, end: 10000, name: "b" },
-			{ start: 0, end: 10000, name: "c" },
-			{ start: 0, end: 10000, name: "d" },
-			{ start: 0, end: 10000, name: "e" },
-			{ start: 0, end: 10000, name: "f" },
-			{ start: 0, end: 10000, name: "g" }
-		    ],
+		    dummyChroms,
 		    new goog.vec.Vec3.createFromValues(0.0,
 						       -thisObj.genomeHeight, 
 						       0.0),
@@ -115,35 +112,35 @@ function Spinteny(container) {
 	    }
 	);
     
-    var LCBs = [0, 1, 2, 3, 4, 5, 6].map(
-	    function(chrId) {
-		return [
-		    [
-			[0, chrId, 0, 4000],
-			[1, chrId, 0, 4000]
-			//[2, chrId, 0, 4000],
-			//[3, chrId, 0, 4000],
-		    ],
-		    [
-			[0, chrId, 6000, 10000],
-			[1, chrId, 6000, 10000]
-			//[2, chrId, 6000, 10000],
-			//[3, chrId, 6000, 10000],
-		    ]
-		];
-	    }
-	);
-    var joined = LCBs.reduce(function(a, b) {
-	return a.concat(b);
-    }, []);
+    var dummyLCBs = [];
+    for (var chrId = 0; chrId < dummyChroms.length; chrId++) {
+	dummyLCBs.push([
+	    [0, chrId, 0, 4000],
+	    [1, chrId, 0, 4000],
+	    [2, chrId, 0, 4000],
+		//[3, chrId, 0, 4000],
+	]);
+	dummyLCBs.push([
+	    [0, chrId, 6000, 10000],
+	    [1, (chrId + 2) % dummyChroms.length, 6000, 10000],
+	    [2, chrId, 6000, 10000],
+	    //[3, chrId, 6000, 10000],
+	]);
+    }
 
-    var synVerts = this.LCBsToVertices(joined);
+    var synVerts = this.LCBsToVertices(dummyLCBs);
 
     var camera = new GLOW.Camera({
-	aspect: containerSize.width / containerSize.height
+	aspect: this.containerSize.width / this.containerSize.height
     });
 
-    var fogRange = new Float32Array([350, 900]);
+    // fragments fade from fogRange[0] to alpha=0 at fogRange[1]
+    var fogRange = new Float32Array([
+	this.cameraDistance - this.genomeRadius,
+	// multiplying genomeRadius by a factor here so that
+	// the far side isn't completely invisible
+	this.cameraDistance + (this.genomeRadius * 4)
+    ]);
 
     var anchorShaderInfo = {
 	vertexShader: vertShader,
@@ -209,48 +206,49 @@ function Spinteny(container) {
     this.anchors.draw();
     this.twists.draw();
 
-    this.eventHandlers = {};
+    this.drag = {};
     this.setDragHandler();
 }
 
 Spinteny.prototype.setDragHandler = function() {
-    this.eventHandlers.mousedown = 
+    this.drag.mousedown = 
 	goog.events.listen(this.container, "mousedown",
 			   this.startDrag, false, this);
 };
 
 Spinteny.prototype.startDrag = function(event) {
-    this.dragStart = goog.style.getClientPosition(event);
-    this.genomeClicked =
-	Math.floor( ( ( this.dragStart.y 
+    this.drag.start = goog.style.getClientPosition(event);
+    this.drag.org =
+	Math.floor( ( ( this.drag.start.y 
 			- goog.style.getClientPosition(this.container).y )
 		      / (this.totalHeight * 2.6) )
 		    * (this.genomeCount) ); //TODO: actually do this right
-    this.startingTransform = new Float32Array(16);
-    this.startingTransform.set(this.orgTransforms[this.genomeClicked]);
-    this.eventHandlers.mouseup = 
+    this.drag.initTransform = new Float32Array(16);
+    this.drag.initTransform.set(this.orgTransforms[this.drag.org]);
+    this.drag.mouseup = 
 	goog.events.listen(this.container, "mouseup",
 			   this.endDrag, false, this);
-    this.eventHandlers.mouseout = 
+    this.drag.mouseout = 
 	goog.events.listen(this.container, "mouseout",
 			   this.endDrag, false, this);
-    this.eventHandlers.mousemove = 
+    this.drag.mousemove = 
 	goog.events.listen(this.container, "mousemove",
 			   this.dragMove, false, this);
 };
 
 Spinteny.prototype.endDrag = function() {
-    goog.events.unlistenByKey(this.eventHandlers.mousemove);
-    goog.events.unlistenByKey(this.eventHandlers.mouseup);
-    goog.events.unlistenByKey(this.eventHandlers.mouseout);
+    goog.events.unlistenByKey(this.drag.mousemove);
+    goog.events.unlistenByKey(this.drag.mouseup);
+    goog.events.unlistenByKey(this.drag.mouseout);
 };
 
 Spinteny.prototype.dragMove = function(event) {
     var clientPos = goog.style.getClientPosition(event);
-    var clientDeltaX = clientPos.x - this.dragStart.x;
-    var angle = Math.atan(clientDeltaX / this.cameraDistance);
-    this.orgTransforms[this.genomeClicked].set(this.startingTransform);
-    goog.vec.Mat4.rotateY(this.orgTransforms[this.genomeClicked], angle);
+    var clientDeltaX = clientPos.x - this.drag.start.x;
+    // how much camera projection math do we have to deal with here?
+    var angle = clientDeltaX / this.cameraDistance;
+    this.orgTransforms[this.drag.org].set(this.drag.initTransform);
+    goog.vec.Mat4.rotateY(this.orgTransforms[this.drag.org], angle);
     
     this.context.cache.clear();
     this.context.clear();
