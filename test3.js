@@ -40,12 +40,13 @@ var fragShader =
 	"    const float epsilon = 0.01;",
 	"    float z = gl_FragCoord.z / gl_FragCoord.w;",
 	"    float a = (fogRange.y - z) / (fogRange.y - fogRange.x);",
-	"    a = pow(clamp(a, 0.0, 1.0), 3.0);",
-	"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
-	"        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0 * a);",
-	"    } else {",
-	"        gl_FragColor = vec4(0.2, 0.2, 0.2, 0.4 * a);",
-	"    }",
+	"    a = pow(clamp(a, 0.0, 1.0), 4.0);",
+	"    //if (any(lessThan(vCenter, vec3(epsilon)))) {",
+	"    //    gl_FragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
+	"    //} else {",
+	"        gl_FragColor = vec4(0.2, 0.2, 0.4, 0.1 * a);",
+	"    //}",
+	"    gl_FragColor = vec4(vec3(1.0) - gl_FragColor.rgb, gl_FragColor.a);",
 	"}"
     ].join( "\n" );
 
@@ -139,7 +140,7 @@ function Spinteny(container) {
 	this.cameraDistance - this.genomeRadius,
 	// multiplying genomeRadius by a factor here so that
 	// the far side isn't completely invisible
-	this.cameraDistance + (this.genomeRadius * 4)
+	this.cameraDistance + (this.genomeRadius * 2)
     ]);
 
     var anchorShaderInfo = {
@@ -194,9 +195,10 @@ function Spinteny(container) {
     this.twists = new GLOW.Shader(twistShaderInfo);
 
     GL.disable(GL.CULL_FACE);
-    GL.enable(GL.BLEND);
-    GL.blendFunc(GL.SRC_ALPHA, GL.ONE_MINUS_SRC_ALPHA);
     GL.disable(GL.DEPTH_TEST);
+    GL.enable(GL.BLEND);
+    GL.blendFunc(GL.SRC_ALPHA, GL.ONE);
+    GL.blendEquation(GL.FUNC_REVERSE_SUBTRACT);
 
     camera.localMatrix.setPosition(0, 0, this.cameraDistance);
     camera.update();
