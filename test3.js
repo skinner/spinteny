@@ -62,15 +62,16 @@ function Spinteny(container) {
     this.context.setupClear( { red: 1, green: 1, blue: 1, alpha: 1 } );
     this.container.appendChild(this.context.domElement);
 
+    this.cameraDistance = 400;
+    this.cameraFOVY = 40;
+
     this.genomeCount = 3;
-    this.totalHeight = 160; //arbitrary, related to camera FOV and distance
-    this.genomeHeight = this.totalHeight / (this.genomeCount * 2);
+    this.genomeHeight =
+	this.heightAt(this.cameraDistance) / (this.genomeCount * 2);
 
     this.genomeRadius = 200;
     this.chromSpacing = Math.PI / 18;
 
-    this.cameraDistance = 400;
-    
     this.orgTransformFlat = new Float32Array(16 * this.genomeCount);
     this.orgTransforms = [];
     for (var i = 0; i < this.genomeCount; i++) {
@@ -80,7 +81,7 @@ function Spinteny(container) {
 	goog.vec.Mat4.makeIdentity(this.orgTransforms[i]);
 
 	goog.vec.Mat4.translate(this.orgTransforms[i], 0,
-				(this.totalHeight / 2) 
+				(this.heightAt(this.cameraDistance) / 2) 
 				- (i * 2 * this.genomeHeight)
 				- (this.genomeHeight / 2),
 				0);
@@ -124,7 +125,7 @@ function Spinteny(container) {
 	dummyLCBs.push([
 	    [0, chrId, 6000, 10000],
 	    [1, (chrId + 2) % dummyChroms.length, 6000, 10000],
-	    [2, chrId, 6000, 10000],
+	    [2, chrId, 10000, 6000],
 	    //[3, chrId, 6000, 10000],
 	]);
     }
@@ -132,7 +133,8 @@ function Spinteny(container) {
     var synVerts = this.LCBsToVertices(dummyLCBs);
 
     var camera = new GLOW.Camera({
-	aspect: this.containerSize.width / this.containerSize.height
+	aspect: this.containerSize.width / this.containerSize.height,
+	fov: this.cameraFOVY
     });
 
     // fragments fade from fogRange[0] to alpha=0 at fogRange[1]
@@ -212,6 +214,20 @@ function Spinteny(container) {
     this.setDragHandler();
 }
 
+Spinteny.prototype.nearDistance = function() {
+    return this.cameraDistance - this.genomeRadius;
+};
+
+Spinteny.prototype.heightAt = function(distance) {
+    //this.cameraFOVY is in degrees
+    return 2 * distance * Math.atan(this.cameraFOVY / 180);
+};
+
+Spinteny.prototype.widthAt = function(distance) {
+    var aspect = this.containerSize.width / this.containerSize.height;
+    return 2 * distance * Math.atan((this.cameraFOVY / 180) * aspect);
+};
+
 Spinteny.prototype.setDragHandler = function() {
     this.drag.mousedown = 
 	goog.events.listen(this.container, "mousedown",
@@ -223,7 +239,7 @@ Spinteny.prototype.startDrag = function(event) {
     this.drag.org =
 	Math.floor( ( ( this.drag.start.y 
 			- goog.style.getClientPosition(this.container).y )
-		      / (this.totalHeight * 2.6) )
+		      / this.containerSize.height )
 		    * (this.genomeCount) ); //TODO: actually do this right
     this.drag.initTransform = new Float32Array(16);
     this.drag.initTransform.set(this.orgTransforms[this.drag.org]);
@@ -247,8 +263,12 @@ Spinteny.prototype.endDrag = function() {
 Spinteny.prototype.dragMove = function(event) {
     var clientPos = goog.style.getClientPosition(event);
     var clientDeltaX = clientPos.x - this.drag.start.x;
-    // how much camera projection math do we have to deal with here?
-    var angle = clientDeltaX / this.cameraDistance;
+    var nearDeltaX =
+	(clientDeltaX / this.containerSize.width)
+	* this.widthAt(this.nearDistance());
+    // seem to need a factor of 2 here, but honestly not sure why.
+    // probably forgetting to add one somewhere else.
+    var angle = 2 * (nearDeltaX / this.genomeRadius);
     this.orgTransforms[this.drag.org].set(this.drag.initTransform);
     goog.vec.Mat4.rotateY(this.orgTransforms[this.drag.org], angle);
     
