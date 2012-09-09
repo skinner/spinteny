@@ -8,80 +8,80 @@ goog.require("goog.vec.Vec3");
 
 var vertShader = 
     [
-	"uniform    mat4    orgTransforms[8];",
-	"uniform    mat4    cameraInverse;",
-	"uniform    mat4    cameraProjection;",
+        "uniform    mat4    orgTransforms[8];",
+        "uniform    mat4    cameraInverse;",
+        "uniform    mat4    cameraProjection;",
 
-	"attribute  vec3    vertex;",
-	"attribute  vec3    normal;",
-	"attribute  float   org;",
-	"attribute  vec3    center;",
+        "attribute  vec3    vertex;",
+        "attribute  vec3    normal;",
+        "attribute  float   org;",
+        "attribute  vec3    center;",
 
-	"varying vec3 vCenter;",
+        "varying vec3 vCenter;",
 
-	"void main(void) {",
-	"  vCenter = center;",
-	"  mat4 transform = orgTransforms[int(org)];",
-	"  gl_Position = cameraProjection * cameraInverse * transform * vec4( vertex, 1.0 );",
-	"}"
+        "void main(void) {",
+        "  vCenter = center;",
+        "  mat4 transform = orgTransforms[int(org)];",
+        "  gl_Position = cameraProjection * cameraInverse * transform * vec4( vertex, 1.0 );",
+        "}"
     ].join( "\n" );
 
 var twistVertShader = 
     [
-	"uniform    mat4    orgTransforms[8];",
-	"uniform    mat4    cameraInverse;",
-	"uniform    mat4    cameraProjection;",
+        "uniform    mat4    orgTransforms[8];",
+        "uniform    mat4    cameraInverse;",
+        "uniform    mat4    cameraProjection;",
 
-	"attribute  vec3    start;",
-	"attribute  vec3    end;",
-	"attribute  vec3    otherStart;",
-	"attribute  vec3    otherEnd;",
-	"attribute  float   prevOrg;",
-	"attribute  float   nextOrg;",
-	"attribute  float   distance;",
-	"attribute  vec3    center;",
+        "attribute  vec3    start;",
+        "attribute  vec3    end;",
+        "attribute  vec3    otherStart;",
+        "attribute  vec3    otherEnd;",
+        "attribute  float   prevOrg;",
+        "attribute  float   nextOrg;",
+        "attribute  float   distance;",
+        "attribute  vec3    center;",
 
-	"varying vec3 vCenter;",
+        "varying vec3 vCenter;",
 
-	"void main(void) {",
-	"  vCenter = center;",
+        "void main(void) {",
+        "  vCenter = center;",
 
-	"  mat4 startTrans = orgTransforms[int(prevOrg)];",
-	"  mat4 endTrans = orgTransforms[int(nextOrg)];",
-	"  vec4 tStart = startTrans * vec4(start, 1.0);",
-	"  vec4 tEnd = endTrans * vec4(end, 1.0);",
-	"  vec4 toStart = startTrans * vec4(otherStart, 1.0);",
-	"  vec4 toEnd = endTrans * vec4(otherEnd, 1.0);",
-	"  vec4 pos = tStart + (distance * (tEnd - tStart));",
-	// TODO calculate normal using otherStart and otherEnd
-	"  gl_Position = cameraProjection * cameraInverse * vec4(pos.xyz, 1.0);",
-	"}"
+        "  mat4 startTrans = orgTransforms[int(prevOrg)];",
+        "  mat4 endTrans = orgTransforms[int(nextOrg)];",
+        "  vec4 tStart = startTrans * vec4(start, 1.0);",
+        "  vec4 tEnd = endTrans * vec4(end, 1.0);",
+        "  vec4 toStart = startTrans * vec4(otherStart, 1.0);",
+        "  vec4 toEnd = endTrans * vec4(otherEnd, 1.0);",
+        "  vec4 pos = tStart + (distance * (tEnd - tStart));",
+        // TODO calculate normal using otherStart and otherEnd
+        "  gl_Position = cameraProjection * cameraInverse * vec4(pos.xyz, 1.0);",
+        "}"
     ].join( "\n" );
 
 
 var fragShader =
     [
-	"#ifdef GL_ES",
-	"precision highp float;",
-	"#endif",		
-	
-	"uniform    vec2    fogRange;",
+        "#ifdef GL_ES",
+        "precision highp float;",
+        "#endif",               
+        
+        "uniform    vec2    fogRange;",
 
-	"varying    vec3    vCenter;",
+        "varying    vec3    vCenter;",
 
-	"void main() {",
-	"    const float epsilon = 0.02;",
-	"    float z = gl_FragCoord.z / gl_FragCoord.w;",
-	"    float a = (fogRange.y - z) / (fogRange.y - fogRange.x);",
-	"    a = pow(clamp(a, 0.0, 1.0), 4.0);",
-	"    vec4 fragColor;",
-	"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
-	"        fragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
-	"    } else {",
-	"        fragColor = vec4(0.2, 0.2, 0.4, 0.1 * a);",
-	"    }",
-	"    gl_FragColor = vec4(vec3(1.0) - fragColor.rgb, fragColor.a);",
-	"}"
+        "void main() {",
+        "    const float epsilon = 0.02;",
+        "    float z = gl_FragCoord.z / gl_FragCoord.w;",
+        "    float a = (fogRange.y - z) / (fogRange.y - fogRange.x);",
+        "    a = pow(clamp(a, 0.0, 1.0), 4.0);",
+        "    vec4 fragColor;",
+        "    if (any(lessThan(vCenter, vec3(epsilon)))) {",
+        "        fragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
+        "    } else {",
+        "        fragColor = vec4(0.2, 0.2, 0.4, 0.1 * a);",
+        "    }",
+        "    gl_FragColor = vec4(vec3(1.0) - fragColor.rgb, fragColor.a);",
+        "}"
     ].join( "\n" );
 
 function Spinteny(container) {
@@ -89,8 +89,8 @@ function Spinteny(container) {
     this.containerSize = goog.style.getSize(this.container);
 
     this.context = new GLOW.Context({
-	width: this.containerSize.width,
-	height: this.containerSize.height
+        width: this.containerSize.width,
+        height: this.containerSize.height
     });
 
     this.context.setupClear( { red: 1, green: 1, blue: 1, alpha: 1 } );
@@ -101,7 +101,7 @@ function Spinteny(container) {
 
     this.genomeCount = 3;
     this.genomeHeight =
-	this.heightAt(this.cameraDistance) / (this.genomeCount * 2);
+        this.heightAt(this.cameraDistance) / (this.genomeCount * 2);
 
     this.genomeRadius = 200;
     this.chromSpacing = Math.PI / 18;
@@ -109,126 +109,126 @@ function Spinteny(container) {
     this.orgTransformFlat = new Float32Array(16 * this.genomeCount);
     this.orgTransforms = [];
     for (var i = 0; i < this.genomeCount; i++) {
-	this.orgTransforms[i] =
-	    this.orgTransformFlat.subarray(i * 16, (i * 16) + 16);
+        this.orgTransforms[i] =
+            this.orgTransformFlat.subarray(i * 16, (i * 16) + 16);
 
-	goog.vec.Mat4.makeIdentity(this.orgTransforms[i]);
+        goog.vec.Mat4.makeIdentity(this.orgTransforms[i]);
 
-	goog.vec.Mat4.translate(this.orgTransforms[i], 0,
-				(this.heightAt(this.cameraDistance) / 2) 
-				- (i * 2 * this.genomeHeight)
-				- (this.genomeHeight / 2),
-				0);
+        goog.vec.Mat4.translate(this.orgTransforms[i], 0,
+                                (this.heightAt(this.cameraDistance) / 2) 
+                                - (i * 2 * this.genomeHeight)
+                                - (this.genomeHeight / 2),
+                                0);
     }
-    	
+        
     goog.vec.Mat4.rotateY(this.orgTransforms[1], Math.PI/18);
 
     var thisObj = this;
     var dummyChroms = [
-	{ start: 0, end: 10000, name: "a" },
-	{ start: 0, end: 10000, name: "b" },
-	{ start: 0, end: 10000, name: "c" },
-	{ start: 0, end: 10000, name: "d" },
-	{ start: 0, end: 10000, name: "e" },
-	{ start: 0, end: 10000, name: "f" },
-	{ start: 0, end: 10000, name: "g" }
+        { start: 0, end: 10000, name: "a" },
+        { start: 0, end: 10000, name: "b" },
+        { start: 0, end: 10000, name: "c" },
+        { start: 0, end: 10000, name: "d" },
+        { start: 0, end: 10000, name: "e" },
+        { start: 0, end: 10000, name: "f" },
+        { start: 0, end: 10000, name: "g" }
     ];
 
     this.mappers = 
-	[0, 1, 2, 3].map(
-	    function(orgId) {
-		return new CylMapper(
-		    dummyChroms,
-		    new goog.vec.Vec3.createFromValues(0.0,
-						       -thisObj.genomeHeight, 
-						       0.0),
-		    new goog.vec.Vec3.createFromValues(0.0, 0.0, thisObj.genomeRadius),
-		    thisObj.chromSpacing
-		);
-	    }
-	);
+        [0, 1, 2, 3].map(
+            function(orgId) {
+                return new CylMapper(
+                    dummyChroms,
+                    new goog.vec.Vec3.createFromValues(0.0,
+                                                       -thisObj.genomeHeight, 
+                                                       0.0),
+                    new goog.vec.Vec3.createFromValues(0.0, 0.0, thisObj.genomeRadius),
+                    thisObj.chromSpacing
+                );
+            }
+        );
     
     var dummyLCBs = [];
     for (var chrId = 0; chrId < dummyChroms.length; chrId++) {
-	dummyLCBs.push([
-	    [0, chrId, 0, 4000],
-	    [1, chrId, 0, 4000],
-	    [2, chrId, 0, 4000],
-		//[3, chrId, 0, 4000],
-	]);
-	dummyLCBs.push([
-	    [0, chrId, 6000, 10000],
-	    [1, (chrId + 2) % dummyChroms.length, 6000, 10000],
-	    [2, chrId, 10000, 6000],
-	    //[3, chrId, 6000, 10000],
-	]);
+        dummyLCBs.push([
+            [0, chrId, 0, 4000],
+            [1, chrId, 0, 4000],
+            [2, chrId, 0, 4000],
+                //[3, chrId, 0, 4000],
+        ]);
+        dummyLCBs.push([
+            [0, chrId, 6000, 10000],
+            [1, (chrId + 2) % dummyChroms.length, 6000, 10000],
+            [2, chrId, 10000, 6000],
+            //[3, chrId, 6000, 10000],
+        ]);
     }
 
     var synVerts = this.LCBsToVertices(dummyLCBs);
 
     var camera = new GLOW.Camera({
-	aspect: this.containerSize.width / this.containerSize.height,
-	fov: this.cameraFOVY
+        aspect: this.containerSize.width / this.containerSize.height,
+        fov: this.cameraFOVY
     });
 
     // fragments fade from fogRange[0] to alpha=0 at fogRange[1]
     var fogRange = new Float32Array([
-	this.cameraDistance - this.genomeRadius,
-	// multiplying genomeRadius by a factor here so that
-	// the far side isn't completely invisible
-	this.cameraDistance + (this.genomeRadius * 2)
+        this.cameraDistance - this.genomeRadius,
+        // multiplying genomeRadius by a factor here so that
+        // the far side isn't completely invisible
+        this.cameraDistance + (this.genomeRadius * 2)
     ]);
 
     var anchorShaderInfo = {
-	vertexShader: vertShader,
-	fragmentShader: fragShader,
+        vertexShader: vertShader,
+        fragmentShader: fragShader,
 
-	data: {
-	    // uniforms
+        data: {
+            // uniforms
 
-	    orgTransforms: {
-		value: this.orgTransformFlat
-	    },
-	    cameraInverse: camera.inverse,
-	    cameraProjection: camera.projection,
-	    fogRange: { value: fogRange},
+            orgTransforms: {
+                value: this.orgTransformFlat
+            },
+            cameraInverse: camera.inverse,
+            cameraProjection: camera.projection,
+            fogRange: { value: fogRange},
 
-	    // attributes
+            // attributes
 
-	    vertex: synVerts.anchors.vertex,
-	    normal: synVerts.anchors.normal,
-	    org: synVerts.anchors.org,
-	    center: triangleBarycenters(synVerts.anchors.vertex.length)
-	},
-	primitives: GL.TRIANGLES
+            vertex: synVerts.anchors.vertex,
+            normal: synVerts.anchors.normal,
+            org: synVerts.anchors.org,
+            center: triangleBarycenters(synVerts.anchors.vertex.length)
+        },
+        primitives: GL.TRIANGLES
     };
 
     var twistShaderInfo = {
-	vertexShader: twistVertShader,
-	fragmentShader: fragShader,
+        vertexShader: twistVertShader,
+        fragmentShader: fragShader,
 
-	data: {
-	    // uniforms
+        data: {
+            // uniforms
 
-	    orgTransforms: {
-		value: this.orgTransformFlat
-	    },
-	    cameraInverse: camera.inverse,
-	    cameraProjection: camera.projection,
-	    fogRange: { value: fogRange},
+            orgTransforms: {
+                value: this.orgTransformFlat
+            },
+            cameraInverse: camera.inverse,
+            cameraProjection: camera.projection,
+            fogRange: { value: fogRange},
 
-	    // attributes
+            // attributes
 
             start: synVerts.twists.start,
-	    end: synVerts.twists.end,
+            end: synVerts.twists.end,
             otherStart: synVerts.twists.otherStart,
             otherEnd: synVerts.twists.otherEnd,
             prevOrg: synVerts.twists.prevOrg,
             nextOrg: synVerts.twists.nextOrg,
             distance: synVerts.twists.distance,
-	    center: triangleBarycenters(synVerts.twists.start.length)
-	},
-	primitives: GL.TRIANGLES
+            center: triangleBarycenters(synVerts.twists.start.length)
+        },
+        primitives: GL.TRIANGLES
     };
 
     this.anchors = new GLOW.Shader(anchorShaderInfo);
@@ -268,37 +268,37 @@ Spinteny.prototype.widthAt = function(distance) {
 
 Spinteny.prototype.setDragHandler = function() {
     this.drag.mousedown = 
-	goog.events.listen(this.container, "mousedown",
-			   this.startDrag, false, this);
+        goog.events.listen(this.container, "mousedown",
+                           this.startDrag, false, this);
     this.drag.touchstart = 
-	goog.events.listen(this.container, "touchstart",
-			   this.startDrag, false, this);
+        goog.events.listen(this.container, "touchstart",
+                           this.startDrag, false, this);
 };
 
 Spinteny.prototype.startDrag = function(event) {
     this.drag.start = goog.style.getClientPosition(event);
     this.drag.org =
-	Math.floor( ( ( this.drag.start.y 
-			- goog.style.getClientPosition(this.container).y )
-		      / this.containerSize.height )
-		    * (this.genomeCount) ); //TODO: actually do this right
+        Math.floor( ( ( this.drag.start.y 
+                        - goog.style.getClientPosition(this.container).y )
+                      / this.containerSize.height )
+                    * (this.genomeCount) ); //TODO: actually do this right
     this.drag.initTransform = new Float32Array(16);
     this.drag.initTransform.set(this.orgTransforms[this.drag.org]);
     this.drag.mouseup = 
-	goog.events.listen(this.container, "mouseup",
-			   this.endDrag, false, this);
+        goog.events.listen(this.container, "mouseup",
+                           this.endDrag, false, this);
     this.drag.mouseout = 
-	goog.events.listen(this.container, "mouseout",
-			   this.endDrag, false, this);
+        goog.events.listen(this.container, "mouseout",
+                           this.endDrag, false, this);
     this.drag.mousemove = 
-	goog.events.listen(this.container, "mousemove",
-			   this.dragMove, false, this);
+        goog.events.listen(this.container, "mousemove",
+                           this.dragMove, false, this);
     this.drag.touchend = 
-	goog.events.listen(this.container, "touchend",
-			   this.endDrag, false, this);
+        goog.events.listen(this.container, "touchend",
+                           this.endDrag, false, this);
     this.drag.touchmove = 
-	goog.events.listen(this.container, "touchmove",
-			   this.dragMove, false, this);
+        goog.events.listen(this.container, "touchmove",
+                           this.dragMove, false, this);
 };
 
 Spinteny.prototype.endDrag = function() {
@@ -313,8 +313,8 @@ Spinteny.prototype.dragMove = function(event) {
     var clientPos = goog.style.getClientPosition(event);
     var clientDeltaX = clientPos.x - this.drag.start.x;
     var nearDeltaX =
-	(clientDeltaX / this.containerSize.width)
-	* this.widthAt(this.nearDistance());
+        (clientDeltaX / this.containerSize.width)
+        * this.widthAt(this.nearDistance());
     // seem to need a factor of 2 here, but honestly not sure why.
     // probably forgetting to add one somewhere else.
     var angle = 2 * (nearDeltaX / this.genomeRadius);
@@ -329,11 +329,11 @@ Spinteny.prototype.dragMove = function(event) {
 
 function triangleBarycenters(length) {
     var centers = new Float32Array([1, 0, 0,
-				    0, 1, 0,
-				    0, 0, 1]);
+                                    0, 1, 0,
+                                    0, 0, 1]);
     var allCenters = new Float32Array(length);
     for (var i = 0; i < length; i += 9) {
-	allCenters.set(centers, i);
+        allCenters.set(centers, i);
     }
     return allCenters;
 }
@@ -369,19 +369,19 @@ function calcArrayFaceNormals(src, dst) {
     var v13 = goog.vec.Vec3.create();
     var result = goog.vec.Vec3.create();
     for (var i = 0; i < src.length; i += 9) {
-	// doing some math myself here rather than using a lib
-	// function in order to avoid allocating
-	v12[0] = src[i + 3] - src[i + 0];
-	v12[1] = src[i + 4] - src[i + 1];
-	v12[2] = src[i + 5] - src[i + 2];
-	v13[0] = src[i + 6] - src[i + 0];
-	v13[1] = src[i + 7] - src[i + 1];
-	v13[2] = src[i + 8] - src[i + 2];
-	goog.vec.Vec3.cross(v12, v13, result);
-	goog.vec.Vec3.normalize(result, result);
-	dst.set(result, i + 0);
-	dst.set(result, i + 3);
-	dst.set(result, i + 6);
+        // doing some math myself here rather than using a lib
+        // function in order to avoid allocating
+        v12[0] = src[i + 3] - src[i + 0];
+        v12[1] = src[i + 4] - src[i + 1];
+        v12[2] = src[i + 5] - src[i + 2];
+        v13[0] = src[i + 6] - src[i + 0];
+        v13[1] = src[i + 7] - src[i + 1];
+        v13[2] = src[i + 8] - src[i + 2];
+        goog.vec.Vec3.cross(v12, v13, result);
+        goog.vec.Vec3.normalize(result, result);
+        dst.set(result, i + 0);
+        dst.set(result, i + 3);
+        dst.set(result, i + 6);
     }
 }
 
@@ -402,10 +402,10 @@ function repeat(val, dst, offset, count) {
  */
 Spinteny.prototype.matchToQuad = function(match) {
     return [
-	this.mappers[match[0]].toSpatial(match[1], match[2], 0),
-	this.mappers[match[0]].toSpatial(match[1], match[3], 0),
-	this.mappers[match[0]].toSpatial(match[1], match[2], 1),
-	this.mappers[match[0]].toSpatial(match[1], match[3], 1)
+        this.mappers[match[0]].toSpatial(match[1], match[2], 0),
+        this.mappers[match[0]].toSpatial(match[1], match[3], 0),
+        this.mappers[match[0]].toSpatial(match[1], match[2], 1),
+        this.mappers[match[0]].toSpatial(match[1], match[3], 1)
     ];
 }
 
@@ -442,32 +442,32 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
     var numAnchors = 0;
     var numTwists = 0;
     for (var i = 0; i < blocks.length; i++) {
-	// there's an anchor for each block,
-	numAnchors += blocks[i].length;
-	// and there's a twist between related anchors
-	numTwists += blocks[i].length - 1;
+        // there's an anchor for each block,
+        numAnchors += blocks[i].length;
+        // and there's a twist between related anchors
+        numTwists += blocks[i].length - 1;
     }
     // anchors are planar quadrilaterals
     // using drawArrays means 6 vertices per face
     var anchVertCount = 6 * numAnchors;
     var anchors = {
-	vertex: new Float32Array(3 * anchVertCount),
-	normal: new Float32Array(3 * anchVertCount),
-	// ideally, org would be an unsigned int (or short or byte) array,
-	// but GLSL (in webGL 1.0) doesn't allow those types for attributes
-	org:    new Float32Array(anchVertCount)
+        vertex: new Float32Array(3 * anchVertCount),
+        normal: new Float32Array(3 * anchVertCount),
+        // ideally, org would be an unsigned int (or short or byte) array,
+        // but GLSL (in webGL 1.0) doesn't allow those types for attributes
+        org:    new Float32Array(anchVertCount)
     };
 
     var trisPerTwist = 24;
     var twistVertCount = trisPerTwist * 3 * numTwists;
     var twists = {
-	start:      new Float32Array(3 * twistVertCount),
-	end:        new Float32Array(3 * twistVertCount),
-	otherStart: new Float32Array(3 * twistVertCount),
-	otherEnd:   new Float32Array(3 * twistVertCount),
-	prevOrg:    new Float32Array(twistVertCount),
-	nextOrg:    new Float32Array(twistVertCount),
-	distance:   new Float32Array(twistVertCount)
+        start:      new Float32Array(3 * twistVertCount),
+        end:        new Float32Array(3 * twistVertCount),
+        otherStart: new Float32Array(3 * twistVertCount),
+        otherEnd:   new Float32Array(3 * twistVertCount),
+        prevOrg:    new Float32Array(twistVertCount),
+        nextOrg:    new Float32Array(twistVertCount),
+        distance:   new Float32Array(twistVertCount)
     };
 
     var curAnchor = 0;
@@ -475,61 +475,61 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
     var orgId = 0, chrId = 1, start = 2, end = 3;
 
     for (var blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
-	var block = blocks[blockIdx];
-	var match = 0;
+        var block = blocks[blockIdx];
+        var match = 0;
 
-	// take the genome-space match and convert it into
-	// four 3d-space vertex positions for the quadrilateral
-	// that will visually represent the match
-	var anchorVerts = this.matchToQuad(block[match]);
+        // take the genome-space match and convert it into
+        // four 3d-space vertex positions for the quadrilateral
+        // that will visually represent the match
+        var anchorVerts = this.matchToQuad(block[match]);
 
-	// add two triangles for this quad to anchors.vertex
-	// (18 is for 3 values (x, y, z) for 6 vertices)
-	trianglesForQuad(anchorVerts, anchors.vertex, curAnchor * 18);
-	// set anchors.org to this organism ID for all 6 vertices
-	// in the quad
-	var org = block[match][orgId];
-	repeat(org, anchors.org, curAnchor * 6, 6);
-	curAnchor++;
-	
-	for (match = 1; match < block.length; match++) {
-	    var oldAnchorVerts = anchorVerts;
-	    anchorVerts = this.matchToQuad(block[match]);
+        // add two triangles for this quad to anchors.vertex
+        // (18 is for 3 values (x, y, z) for 6 vertices)
+        trianglesForQuad(anchorVerts, anchors.vertex, curAnchor * 18);
+        // set anchors.org to this organism ID for all 6 vertices
+        // in the quad
+        var org = block[match][orgId];
+        repeat(org, anchors.org, curAnchor * 6, 6);
+        curAnchor++;
+        
+        for (match = 1; match < block.length; match++) {
+            var oldAnchorVerts = anchorVerts;
+            anchorVerts = this.matchToQuad(block[match]);
 
-	    // the top two vertices for twistCorners are the bottom two
-	    // from the previous anchor, and the bottom two vertices for
-	    // twistCorners are the top two vertices from the next anchor
-	    //
-	    //       0            1
-	    //       |  oldAnchor |
-	    //       2____________3
-	    //       /            /
-	    //      /    twist   /
-	    //     /___________ /
-	    //    0            1
+            // the top two vertices for twistCorners are the bottom two
+            // from the previous anchor, and the bottom two vertices for
+            // twistCorners are the top two vertices from the next anchor
+            //
+            //       0            1
+            //       |  oldAnchor |
+            //       2____________3
+            //       /            /
+            //      /    twist   /
+            //     /___________ /
+            //    0            1
             //    |   anchor   |
-	    //    2            3
-	    twistCorners = [oldAnchorVerts[2], oldAnchorVerts[3],
-			    anchorVerts[0], anchorVerts[1]];
+            //    2            3
+            twistCorners = [oldAnchorVerts[2], oldAnchorVerts[3],
+                            anchorVerts[0], anchorVerts[1]];
 
-	    var prevOrg = org;
-	    org = block[match][orgId];
+            var prevOrg = org;
+            org = block[match][orgId];
 
-	    for (var tri = 0; tri < trisPerTwist; tri += 2) {
-		this.addTwistTriPair(twists, twistCorners,
-				     prevOrg, org,
-				     curTwist, tri,
-				     trisPerTwist,
-				     tri / trisPerTwist,
-				     (tri + 2) / trisPerTwist);
-	    }
+            for (var tri = 0; tri < trisPerTwist; tri += 2) {
+                this.addTwistTriPair(twists, twistCorners,
+                                     prevOrg, org,
+                                     curTwist, tri,
+                                     trisPerTwist,
+                                     tri / trisPerTwist,
+                                     (tri + 2) / trisPerTwist);
+            }
 
-	    curTwist++;
+            curTwist++;
 
-	    trianglesForQuad(anchorVerts, anchors.vertex, curAnchor * 18);
-	    repeat(org, anchors.org, curAnchor * 6, 6);
-	    curAnchor++;
-	}
+            trianglesForQuad(anchorVerts, anchors.vertex, curAnchor * 18);
+            repeat(org, anchors.org, curAnchor * 6, 6);
+            curAnchor++;
+        }
     }
 
     calcArrayFaceNormals(anchors.vertex, anchors.normal);
@@ -538,44 +538,44 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
 };
 
 Spinteny.prototype.addTwistTriPair = function(twists, twistCorners,
-					      prevOrg, nextOrg,
-					      curTwist, tri,
-					      trisPerTwist,
-					      startDistance,
-					      endDistance) {
+                                              prevOrg, nextOrg,
+                                              curTwist, tri,
+                                              trisPerTwist,
+                                              startDistance,
+                                              endDistance) {
     var startingVert = ((curTwist * trisPerTwist) + tri) * 3;
     // tri 0
     this.addTwistVert(twists, twistCorners[0], twistCorners[2],
-		      twistCorners[1], twistCorners[3],
-		      prevOrg, nextOrg, startingVert,
-		      startDistance);
+                      twistCorners[1], twistCorners[3],
+                      prevOrg, nextOrg, startingVert,
+                      startDistance);
     this.addTwistVert(twists, twistCorners[0], twistCorners[2],
-		      twistCorners[1], twistCorners[3],
-		      prevOrg, nextOrg, startingVert + 1,
-		      endDistance);
+                      twistCorners[1], twistCorners[3],
+                      prevOrg, nextOrg, startingVert + 1,
+                      endDistance);
     this.addTwistVert(twists, twistCorners[1], twistCorners[3],
-		      twistCorners[1], twistCorners[3],
-		      prevOrg, nextOrg, startingVert + 2,
-		      startDistance);
+                      twistCorners[1], twistCorners[3],
+                      prevOrg, nextOrg, startingVert + 2,
+                      startDistance);
     // tri 1
     this.addTwistVert(twists, twistCorners[1], twistCorners[3],
-		      twistCorners[0], twistCorners[2],
-		      prevOrg, nextOrg, startingVert + 3,
-		      startDistance);
+                      twistCorners[0], twistCorners[2],
+                      prevOrg, nextOrg, startingVert + 3,
+                      startDistance);
     this.addTwistVert(twists, twistCorners[0], twistCorners[2],
-		      twistCorners[1], twistCorners[3],
-		      prevOrg, nextOrg, startingVert + 4,
-		      endDistance);
+                      twistCorners[1], twistCorners[3],
+                      prevOrg, nextOrg, startingVert + 4,
+                      endDistance);
     this.addTwistVert(twists, twistCorners[1], twistCorners[3],
-		      twistCorners[1], twistCorners[3],
-		      prevOrg, nextOrg, startingVert + 5,
-		      endDistance);
+                      twistCorners[1], twistCorners[3],
+                      prevOrg, nextOrg, startingVert + 5,
+                      endDistance);
 };
 
 Spinteny.prototype.addTwistVert = function(twists, start, end,
-					   otherStart, otherEnd,
-					   prevOrg, nextOrg,
-					   vertIndex, distance) {
+                                           otherStart, otherEnd,
+                                           prevOrg, nextOrg,
+                                           vertIndex, distance) {
     twists.start.set(start, vertIndex * 3);
     twists.end.set(end, vertIndex * 3);
     twists.otherStart.set(otherStart, vertIndex * 3);
@@ -595,7 +595,7 @@ Spinteny.prototype.addTwistVert = function(twists, start, end,
 function CylMapper(chroms, axis, origin, padding) {
     this.axis = axis;
     this.rotAxis = goog.vec.Vec3.normalize(axis,
-					   goog.vec.Vec3.createFloat32());
+                                           goog.vec.Vec3.createFloat32());
     // the rotations done by this mapper are left-handed, i.e., 
     // in toSpatial, positive distance is downward, and
     // positive rotations go counterclockwise if you're looking
@@ -612,10 +612,10 @@ function CylMapper(chroms, axis, origin, padding) {
 
     var partialSum = 0;
     for (var i = 0; i < chroms.length; i++) {
-	var name = ("name" in chroms[i]) ? chroms[i].name : i;
-	this.byName["" + name] = i;
-	this.partialSums.push(partialSum);
-	partialSum += chroms[i].end - chroms[i].start;
+        var name = ("name" in chroms[i]) ? chroms[i].name : i;
+        this.byName["" + name] = i;
+        this.partialSums.push(partialSum);
+        partialSum += chroms[i].end - chroms[i].start;
     }
     this.totalLength = partialSum;
 }
@@ -631,26 +631,26 @@ CylMapper.prototype.toSpatial = function(index, base, distance) {
     distance = (distance === undefined) ? 0 : distance;
     //var index = this.byName["" + chrom];
     var angle = 
-	( ( ( this.partialSums[index] + ( base - this.chroms[index].start ) )
-	    / this.totalLength )
-	  * ( 2 * Math.PI ) )
-	+ (this.padding * index);
+        ( ( ( this.partialSums[index] + ( base - this.chroms[index].start ) )
+            / this.totalLength )
+          * ( 2 * Math.PI ) )
+        + (this.padding * index);
     // scale the angle down to leave room for padding
     angle *= ( (2 * Math.PI)
-	       / ( (2 * Math.PI) 
-		   + ( this.padding * ( this.chroms.length ) ) ) );
+               / ( (2 * Math.PI) 
+                   + ( this.padding * ( this.chroms.length ) ) ) );
     var rotM = goog.vec.Mat4.makeRotate(goog.vec.Mat4.createFloat32(),
-					angle,
-					this.rotAxis[0],
-					this.rotAxis[1],
-					this.rotAxis[2]);
+                                        angle,
+                                        this.rotAxis[0],
+                                        this.rotAxis[1],
+                                        this.rotAxis[2]);
     var result = goog.vec.Vec3.createFloat32();
     goog.vec.Mat4.multVec3NoTranslate(rotM, this.origin, result);
 
     if (0 != distance) {
-	var distVec = goog.vec.Vec3.createFloat32();
-	goog.vec.Vec3.scale(this.axis, distance, distVec);
-	goog.vec.Vec3.add(result, distVec, result);
+        var distVec = goog.vec.Vec3.createFloat32();
+        goog.vec.Vec3.scale(this.axis, distance, distVec);
+        goog.vec.Vec3.add(result, distVec, result);
     }
 
     return result;
