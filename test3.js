@@ -74,12 +74,13 @@ var fragShader =
 	"    float z = gl_FragCoord.z / gl_FragCoord.w;",
 	"    float a = (fogRange.y - z) / (fogRange.y - fogRange.x);",
 	"    a = pow(clamp(a, 0.0, 1.0), 4.0);",
+	"    vec4 fragColor;",
 	"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
-	"        gl_FragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
+	"        fragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
 	"    } else {",
-	"        gl_FragColor = vec4(0.2, 0.2, 0.4, 0.1 * a);",
+	"        fragColor = vec4(0.2, 0.2, 0.4, 0.1 * a);",
 	"    }",
-	"    gl_FragColor = vec4(vec3(1.0) - gl_FragColor.rgb, gl_FragColor.a);",
+	"    gl_FragColor = vec4(vec3(1.0) - fragColor.rgb, fragColor.a);",
 	"}"
     ].join( "\n" );
 
@@ -269,6 +270,9 @@ Spinteny.prototype.setDragHandler = function() {
     this.drag.mousedown = 
 	goog.events.listen(this.container, "mousedown",
 			   this.startDrag, false, this);
+    this.drag.touchstart = 
+	goog.events.listen(this.container, "touchstart",
+			   this.startDrag, false, this);
 };
 
 Spinteny.prototype.startDrag = function(event) {
@@ -289,9 +293,17 @@ Spinteny.prototype.startDrag = function(event) {
     this.drag.mousemove = 
 	goog.events.listen(this.container, "mousemove",
 			   this.dragMove, false, this);
+    this.drag.touchend = 
+	goog.events.listen(this.container, "touchend",
+			   this.endDrag, false, this);
+    this.drag.touchmove = 
+	goog.events.listen(this.container, "touchmove",
+			   this.dragMove, false, this);
 };
 
 Spinteny.prototype.endDrag = function() {
+    goog.events.unlistenByKey(this.drag.touchmove);
+    goog.events.unlistenByKey(this.drag.touchend);
     goog.events.unlistenByKey(this.drag.mousemove);
     goog.events.unlistenByKey(this.drag.mouseup);
     goog.events.unlistenByKey(this.drag.mouseout);
