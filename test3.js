@@ -75,11 +75,11 @@ var fragShader =
         "    float a = (fogRange.y - z) / (fogRange.y - fogRange.x);",
         "    a = pow(clamp(a, 0.0, 1.0), 4.0);",
         "    vec4 fragColor;",
-        "    if (any(lessThan(vCenter, vec3(epsilon)))) {",
-        "        fragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
-        "    } else {",
+        //"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
+        //"        fragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
+        //"    } else {",
         "        fragColor = vec4(0.2, 0.2, 0.4, 0.1 * a);",
-        "    }",
+        //"    }",
         "    gl_FragColor = vec4(vec3(1.0) - fragColor.rgb, fragColor.a);",
         "}"
     ].join( "\n" );
@@ -92,6 +92,8 @@ function Spinteny(container) {
         width: this.containerSize.width,
         height: this.containerSize.height
     });
+    this.context.domElement.style.width = "100%";
+    this.context.domElement.style.height = "100%";
 
     this.context.setupClear( { red: 1, green: 1, blue: 1, alpha: 1 } );
     this.container.appendChild(this.context.domElement);
@@ -176,7 +178,7 @@ function Spinteny(container) {
         this.cameraDistance - this.genomeRadius,
         // multiplying genomeRadius by a factor here so that
         // the far side isn't completely invisible
-        this.cameraDistance + (this.genomeRadius * 2)
+        this.cameraDistance + (this.genomeRadius * 2.5)
     ]);
 
     var anchorShaderInfo = {
@@ -267,51 +269,66 @@ Spinteny.prototype.widthAt = function(distance) {
 };
 
 Spinteny.prototype.setDragHandler = function() {
-    this.drag.mousedown = 
-        goog.events.listen(this.container, "mousedown",
-                           this.startDrag, false, this);
-    this.drag.touchstart = 
-        goog.events.listen(this.container, "touchstart",
-                           this.startDrag, false, this);
+    var thisObj = this;
+    this.drag.startHandler = function(event) { thisObj.dragStart(event); };
+    this.drag.moveHandler = function(event) { thisObj.dragMove(event); };
+    this.drag.endHandler = function(event) { thisObj.dragEnd(event); };
+
+    this.container.addEventListener("mousedown", this.drag.startHandler);
+    this.container.addEventListener("touchstart", this.drag.startHandler);
 };
 
-Spinteny.prototype.startDrag = function(event) {
-    this.drag.start = goog.style.getClientPosition(event);
+Spinteny.prototype.dragStart = function(event) {
+    if (event.touches) {
+        this.drag.start = { x: event.touches[0].clientX,
+                            y: event.touches[0].clientY };
+    } else {
+        this.drag.start = {x: event.clientX, y: event.clientY};
+    }
+    
     this.drag.org =
         Math.floor( ( ( this.drag.start.y 
                         - goog.style.getClientPosition(this.container).y )
                       / this.containerSize.height )
                     * (this.genomeCount) ); //TODO: actually do this right
+
+    this.drag.org = Math.min(this.drag.org, this.genomeCount - 1);
     this.drag.initTransform = new Float32Array(16);
     this.drag.initTransform.set(this.orgTransforms[this.drag.org]);
-    this.drag.mouseup = 
-        goog.events.listen(this.container, "mouseup",
-                           this.endDrag, false, this);
-    this.drag.mouseout = 
-        goog.events.listen(this.container, "mouseout",
-                           this.endDrag, false, this);
-    this.drag.mousemove = 
-        goog.events.listen(this.container, "mousemove",
-                           this.dragMove, false, this);
-    this.drag.touchend = 
-        goog.events.listen(this.container, "touchend",
-                           this.endDrag, false, this);
-    this.drag.touchmove = 
-        goog.events.listen(this.container, "touchmove",
-                           this.dragMove, false, this);
+
+    this.container.addEventListener("mousemove", this.drag.moveHandler);
+    this.container.addEventListener("mouseout", this.drag.endHandler);
+    this.container.addEventListener("mouseup", this.drag.endHandler);
+    this.container.addEventListener("touchmove", this.drag.moveHandler);
+    this.container.addEventListener("touchend", this.drag.endHandler);
+
+    this.container.removeEventListener("mousedown",
+                                       this.drag.startHandler);
+    this.container.removeEventListener("touchstart",
+                                       this.drag.startHandler);
+    event.preventDefault();
 };
 
-Spinteny.prototype.endDrag = function() {
-    goog.events.unlistenByKey(this.drag.touchmove);
-    goog.events.unlistenByKey(this.drag.touchend);
-    goog.events.unlistenByKey(this.drag.mousemove);
-    goog.events.unlistenByKey(this.drag.mouseup);
-    goog.events.unlistenByKey(this.drag.mouseout);
+Spinteny.prototype.dragEnd = function(event) {
+    this.container.removeEventListener("mousemove", this.drag.moveHandler);
+    this.container.removeEventListener("mouseout", this.drag.endHandler);
+    this.container.removeEventListener("mouseup", this.drag.endHandler);
+    this.container.removeEventListener("touchmove", this.drag.moveHandler);
+    this.container.removeEventListener("touchend", this.drag.endHandler);
+
+    this.container.addEventListener("mousedown", this.drag.startHandler);
+    this.container.addEventListener("touchstart", this.drag.startHandler);
+
+    event.preventDefault();
 };
 
 Spinteny.prototype.dragMove = function(event) {
-    var clientPos = goog.style.getClientPosition(event);
-    var clientDeltaX = clientPos.x - this.drag.start.x;
+    var clientDeltaX;
+    if (event.touches) {
+        clientDeltaX = event.touches[0].clientX - this.drag.start.x;
+    } else {
+        clientDeltaX = event.clientX - this.drag.start.x;
+    }
     var nearDeltaX =
         (clientDeltaX / this.containerSize.width)
         * this.widthAt(this.nearDistance());
@@ -325,6 +342,8 @@ Spinteny.prototype.dragMove = function(event) {
     this.context.clear();
     this.anchors.draw();
     this.twists.draw();
+
+    event.preventDefault();
 };
 
 function triangleBarycenters(length) {
