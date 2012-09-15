@@ -99,7 +99,7 @@ function Spinteny(container) {
     this.container.appendChild(this.context.domElement);
 
     this.cameraDistance = 400;
-    this.cameraFOVY = 40;
+    this.cameraFOVY = 40 * (Math.PI / 180); // in radians
 
     this.genomeCount = 3;
     this.genomeHeight =
@@ -237,14 +237,18 @@ function Spinteny(container) {
     GL.blendFunc(GL.SRC_ALPHA, GL.ONE);
     GL.blendEquation(GL.FUNC_REVERSE_SUBTRACT);
 
+    this.drag = {};
+    this.setDragHandler();
+
+    this.draw();
+}
+
+Spinteny.prototype.draw = function() {
     this.context.cache.clear();
     this.context.clear();
     this.anchors.draw();
     this.twists.draw();
-
-    this.drag = {};
-    this.setDragHandler();
-}
+};
 
 Spinteny.prototype.updateViewProj = function() {
     goog.vec.Mat4.makeLookAt(
@@ -256,7 +260,7 @@ Spinteny.prototype.updateViewProj = function() {
 
     goog.vec.Mat4.makePerspective(
         this.projMatrix,
-        this.cameraFOVY * (Math.PI / 180), // y-axis FOV in radians
+        this.cameraFOVY, // y-axis FOV in radians
         this.containerSize.width / this.containerSize.height, //aspect
         0.1, // distance to near clipping plane
         10000 // distance to far clipping plane
@@ -268,13 +272,12 @@ Spinteny.prototype.nearDistance = function() {
 };
 
 Spinteny.prototype.heightAt = function(distance) {
-    //this.cameraFOVY is in degrees
-    return 2 * distance * Math.atan(this.cameraFOVY / 180);
+    return 2 * distance * Math.atan(this.cameraFOVY);
 };
 
 Spinteny.prototype.widthAt = function(distance) {
     var aspect = this.containerSize.width / this.containerSize.height;
-    return 2 * distance * Math.atan((this.cameraFOVY / 180) * aspect);
+    return 2 * distance * Math.atan(this.cameraFOVY * aspect);
 };
 
 Spinteny.prototype.setDragHandler = function() {
@@ -341,16 +344,11 @@ Spinteny.prototype.dragMove = function(event) {
     var nearDeltaX =
         (clientDeltaX / this.containerSize.width)
         * this.widthAt(this.nearDistance());
-    // seem to need a factor of 2 here, but honestly not sure why.
-    // probably forgetting to add one somewhere else.
-    var angle = 2 * (nearDeltaX / this.genomeRadius);
+    var angle = (nearDeltaX / this.genomeRadius);
     this.orgTransforms[this.drag.org].set(this.drag.initTransform);
     goog.vec.Mat4.rotateY(this.orgTransforms[this.drag.org], angle);
     
-    this.context.cache.clear();
-    this.context.clear();
-    this.anchors.draw();
-    this.twists.draw();
+    this.draw();
 
     event.preventDefault();
 };
