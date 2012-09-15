@@ -92,11 +92,12 @@ function Spinteny(container) {
         width: this.containerSize.width,
         height: this.containerSize.height
     });
-    this.context.domElement.style.width = "100%";
-    this.context.domElement.style.height = "100%";
+    this.canvas = this.context.domElement;
+    this.canvas.style.width = "100%";
+    this.canvas.style.height = "100%";
 
     this.context.setupClear( { red: 1, green: 1, blue: 1, alpha: 1 } );
-    this.container.appendChild(this.context.domElement);
+    this.container.appendChild(this.canvas);
 
     this.nearClip = 100;
     this.farClip = 10000;
@@ -267,16 +268,16 @@ Spinteny.prototype.updateViewProj = function() {
     goog.vec.Mat4.makeLookAt(
         this.viewMatrix,
         [0, 0, this.cameraDistance], // eye point
-        [0, 0, -1], // center point
-        [0, 1, 0] // world up vector
+        [0, 0, -1],                  // center point
+        [0, 1, 0]                    // world up vector
     );
 
     goog.vec.Mat4.makePerspective(
         this.projMatrix,
-        this.fovY, // y-axis FOV in radians
-        this.aspect,     // aspect ratio (width/height)
-        this.nearClip,   // distance to near clipping plane
-        this.farClip     // distance to far clipping plane
+        this.fovY,     // y-axis FOV in radians
+        this.aspect,   // aspect ratio (width/height)
+        this.nearClip, // distance to near clipping plane
+        this.farClip   // distance to far clipping plane
     );
 };
 
@@ -315,8 +316,8 @@ Spinteny.prototype.setDragHandler = function() {
     this.drag.moveHandler = function(event) { thisObj.dragMove(event); };
     this.drag.endHandler = function(event) { thisObj.dragEnd(event); };
 
-    this.container.addEventListener("mousedown", this.drag.startHandler);
-    this.container.addEventListener("touchstart", this.drag.startHandler);
+    this.canvas.addEventListener("mousedown", this.drag.startHandler);
+    this.canvas.addEventListener("touchstart", this.drag.startHandler);
 };
 
 Spinteny.prototype.dragStart = function(event) {
@@ -329,7 +330,7 @@ Spinteny.prototype.dragStart = function(event) {
     
     this.drag.org =
         Math.floor( ( ( this.drag.start.y 
-                        - goog.style.getClientPosition(this.container).y )
+                        - goog.style.getClientPosition(this.canvas).y )
                       / this.containerSize.height )
                     * (this.genomeCount) ); //TODO: actually do this right
 
@@ -337,28 +338,26 @@ Spinteny.prototype.dragStart = function(event) {
     this.drag.initTransform = new Float32Array(16);
     this.drag.initTransform.set(this.orgTransforms[this.drag.org]);
 
-    this.container.addEventListener("mousemove", this.drag.moveHandler);
-    this.container.addEventListener("mouseout", this.drag.endHandler);
-    this.container.addEventListener("mouseup", this.drag.endHandler);
-    this.container.addEventListener("touchmove", this.drag.moveHandler);
-    this.container.addEventListener("touchend", this.drag.endHandler);
+    this.canvas.addEventListener("mousemove", this.drag.moveHandler);
+    this.canvas.addEventListener("mouseout", this.drag.endHandler);
+    this.canvas.addEventListener("mouseup", this.drag.endHandler);
+    this.canvas.addEventListener("touchmove", this.drag.moveHandler);
+    this.canvas.addEventListener("touchend", this.drag.endHandler);
 
-    this.container.removeEventListener("mousedown",
-                                       this.drag.startHandler);
-    this.container.removeEventListener("touchstart",
-                                       this.drag.startHandler);
+    this.canvas.removeEventListener("mousedown", this.drag.startHandler);
+    this.canvas.removeEventListener("touchstart", this.drag.startHandler);
     event.preventDefault();
 };
 
 Spinteny.prototype.dragEnd = function(event) {
-    this.container.removeEventListener("mousemove", this.drag.moveHandler);
-    this.container.removeEventListener("mouseout", this.drag.endHandler);
-    this.container.removeEventListener("mouseup", this.drag.endHandler);
-    this.container.removeEventListener("touchmove", this.drag.moveHandler);
-    this.container.removeEventListener("touchend", this.drag.endHandler);
+    this.canvas.removeEventListener("mousemove", this.drag.moveHandler);
+    this.canvas.removeEventListener("mouseout", this.drag.endHandler);
+    this.canvas.removeEventListener("mouseup", this.drag.endHandler);
+    this.canvas.removeEventListener("touchmove", this.drag.moveHandler);
+    this.canvas.removeEventListener("touchend", this.drag.endHandler);
 
-    this.container.addEventListener("mousedown", this.drag.startHandler);
-    this.container.addEventListener("touchstart", this.drag.startHandler);
+    this.canvas.addEventListener("mousedown", this.drag.startHandler);
+    this.canvas.addEventListener("touchstart", this.drag.startHandler);
 
     event.preventDefault();
 };
