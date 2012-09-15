@@ -98,14 +98,29 @@ function Spinteny(container) {
     this.context.setupClear( { red: 1, green: 1, blue: 1, alpha: 1 } );
     this.container.appendChild(this.context.domElement);
 
-    this.cameraDistance = 400;
-    this.cameraFOVY = 40 * (Math.PI / 180); // in radians
+    this.nearClip = 100;
+    this.farClip = 10000;
+
+    this.cameraDistance = 400; // arbitrary, must be larger than nearClip
+    this.aspect = this.containerSize.width / this.containerSize.height;
+
+    this.fovY = 40 * (Math.PI / 180); // in radians
+    this.fovX = 2 * Math.atan(Math.tan(this.fovY / 2) * this.aspect);
+
+    this.viewMatrix = goog.vec.Mat4.createFloat32();
+    this.projMatrix = goog.vec.Mat4.createFloat32();
+    this.updateViewProj()
 
     this.genomeCount = 3;
-    this.genomeHeight =
-        this.heightAt(this.cameraDistance) / (this.genomeCount * 2);
 
-    this.genomeRadius = 200;
+    // there's some trig behind radiusFactor
+    // I wish I could draw you the diagram here
+    var radiusFactor = ( 1 / ( (1 / Math.sin(this.fovX / 2)) - 1 ) );
+    this.genomeRadius = this.cameraDistance * radiusFactor;
+
+    this.genomeHeight =
+        this.heightAt(this.cameraDistance) / ((this.genomeCount * 2) - 1);
+
     this.chromSpacing = Math.PI / 18;
 
     this.orgTransformFlat = new Float32Array(16 * this.genomeCount);
@@ -116,25 +131,23 @@ function Spinteny(container) {
 
         goog.vec.Mat4.makeIdentity(this.orgTransforms[i]);
 
-        goog.vec.Mat4.translate(this.orgTransforms[i], 0,
-                                (this.heightAt(this.cameraDistance) / 2) 
-                                - (i * 2 * this.genomeHeight)
-                                - (this.genomeHeight / 2),
-                                0);
+        goog.vec.Mat4.translate(
+            this.orgTransforms[i],
+            0,
+            (this.heightAt(this.cameraDistance) / 2)
+                - (i * 2 * this.genomeHeight),
+            -this.genomeRadius
+        );
     }
         
     goog.vec.Mat4.rotateY(this.orgTransforms[1], Math.PI/18);
 
-    this.viewMatrix = goog.vec.Mat4.createFloat32();
-    this.projMatrix = goog.vec.Mat4.createFloat32();
-    this.updateViewProj()
-
     // fragments fade from fogRange[0] to alpha=0 at fogRange[1]
     var fogRange = new Float32Array([
-        this.cameraDistance - this.genomeRadius,
+        this.cameraDistance,
         // multiplying genomeRadius by a factor here so that
         // the far side isn't completely invisible
-        this.cameraDistance + (this.genomeRadius * 2.5)
+        this.genomeRadius * 4
     ]);
 
     var thisObj = this;
@@ -254,30 +267,46 @@ Spinteny.prototype.updateViewProj = function() {
     goog.vec.Mat4.makeLookAt(
         this.viewMatrix,
         [0, 0, this.cameraDistance], // eye point
-        [0, 0, -100], // center point
+        [0, 0, -1], // center point
         [0, 1, 0] // world up vector
     );
 
     goog.vec.Mat4.makePerspective(
         this.projMatrix,
-        this.cameraFOVY, // y-axis FOV in radians
-        this.containerSize.width / this.containerSize.height, //aspect
-        0.1, // distance to near clipping plane
-        10000 // distance to far clipping plane
+        this.fovY, // y-axis FOV in radians
+        this.aspect,     // aspect ratio (width/height)
+        this.nearClip,   // distance to near clipping plane
+        this.farClip     // distance to far clipping plane
     );
 };
 
-Spinteny.prototype.nearDistance = function() {
-    return this.cameraDistance - this.genomeRadius;
-};
-
 Spinteny.prototype.heightAt = function(distance) {
-    return 2 * distance * Math.atan(this.cameraFOVY);
+    return 2 * distance * Math.tan(this.fovY / 2);
 };
 
 Spinteny.prototype.widthAt = function(distance) {
-    var aspect = this.containerSize.width / this.containerSize.height;
-    return 2 * distance * Math.atan(this.cameraFOVY * aspect);
+    return this.aspect * this.heightAt(distance);
+};
+
+//x and y on [-1, 1]
+Spinteny.prototype.coordAtWorldZ = function(x, y, worldZ) {
+    var pvInvM = goog.vec.Mat4.create();
+    goog.vec.Mat4.multMat(this.projMatrix, this.viewMatrix, pvInvM);
+    goog.vec.Mat4.invert(pvInvM, pvInvM);
+
+    var startCoord = goog.vec.Vec3.createFloat32FromValues(x, y, 0);
+    var endCoord = goog.vec.Vec3.createFloat32FromValues(x, y, 1);
+
+    goog.vec.Mat4.multVec3Projective(pvInvM, startCoord, startCoord);
+    goog.vec.Mat4.multVec3Projective(pvInvM, endCoord, endCoord);
+
+    ray = goog.vec.Vec3.createFloat32();
+    goog.vec.Vec3.subtract(endCoord, startCoord, ray);
+
+    var t = (worldZ - startCoord[2]) / ray[2];
+    goog.vec.Vec3.scale(ray, t, ray);
+    goog.vec.Vec3.add(startCoord, ray, ray);
+    return ray;
 };
 
 Spinteny.prototype.setDragHandler = function() {
@@ -343,7 +372,7 @@ Spinteny.prototype.dragMove = function(event) {
     }
     var nearDeltaX =
         (clientDeltaX / this.containerSize.width)
-        * this.widthAt(this.nearDistance());
+        * this.widthAt(this.cameraDistance);
     var angle = (nearDeltaX / this.genomeRadius);
     this.orgTransforms[this.drag.org].set(this.drag.initTransform);
     goog.vec.Mat4.rotateY(this.orgTransforms[this.drag.org], angle);
