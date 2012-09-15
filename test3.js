@@ -9,28 +9,28 @@ goog.require("goog.vec.Vec3");
 var vertShader = 
     [
         "uniform    mat4    orgTransforms[8];",
-        "uniform    mat4    cameraInverse;",
-        "uniform    mat4    cameraProjection;",
+        "uniform    mat4    viewMatrix;",
+        "uniform    mat4    projMatrix;",
 
         "attribute  vec3    vertex;",
         "attribute  vec3    normal;",
         "attribute  float   org;",
-        "attribute  vec3    center;",
+        //"attribute  vec3    center;",
 
-        "varying vec3 vCenter;",
+        //"varying vec3 vCenter;",
 
         "void main(void) {",
-        "  vCenter = center;",
+        //"  vCenter = center;",
         "  mat4 transform = orgTransforms[int(org)];",
-        "  gl_Position = cameraProjection * cameraInverse * transform * vec4( vertex, 1.0 );",
+        "  gl_Position = projMatrix * viewMatrix * transform * vec4( vertex, 1.0 );",
         "}"
     ].join( "\n" );
 
 var twistVertShader = 
     [
         "uniform    mat4    orgTransforms[8];",
-        "uniform    mat4    cameraInverse;",
-        "uniform    mat4    cameraProjection;",
+        "uniform    mat4    viewMatrix;",
+        "uniform    mat4    projMatrix;",
 
         "attribute  vec3    start;",
         "attribute  vec3    end;",
@@ -39,12 +39,12 @@ var twistVertShader =
         "attribute  float   prevOrg;",
         "attribute  float   nextOrg;",
         "attribute  float   distance;",
-        "attribute  vec3    center;",
+        //"attribute  vec3    center;",
 
-        "varying vec3 vCenter;",
+        //"varying vec3 vCenter;",
 
         "void main(void) {",
-        "  vCenter = center;",
+        //"  vCenter = center;",
 
         "  mat4 startTrans = orgTransforms[int(prevOrg)];",
         "  mat4 endTrans = orgTransforms[int(nextOrg)];",
@@ -54,7 +54,7 @@ var twistVertShader =
         "  vec4 toEnd = endTrans * vec4(otherEnd, 1.0);",
         "  vec4 pos = tStart + (distance * (tEnd - tStart));",
         // TODO calculate normal using otherStart and otherEnd
-        "  gl_Position = cameraProjection * cameraInverse * vec4(pos.xyz, 1.0);",
+        "  gl_Position = projMatrix * viewMatrix * vec4(pos.xyz, 1.0);",
         "}"
     ].join( "\n" );
 
@@ -67,7 +67,7 @@ var fragShader =
         
         "uniform    vec2    fogRange;",
 
-        "varying    vec3    vCenter;",
+        //"varying    vec3    vCenter;",
 
         "void main() {",
         "    const float epsilon = 0.02;",
@@ -78,7 +78,7 @@ var fragShader =
         //"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
         //"        fragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
         //"    } else {",
-        "        fragColor = vec4(0.2, 0.2, 0.4, 0.1 * a);",
+        "        fragColor = vec4(0.0, 0.0, 0.4, 0.07 * a);",
         //"    }",
         "    gl_FragColor = vec4(vec3(1.0) - fragColor.rgb, fragColor.a);",
         "}"
@@ -125,6 +125,18 @@ function Spinteny(container) {
         
     goog.vec.Mat4.rotateY(this.orgTransforms[1], Math.PI/18);
 
+    this.viewMatrix = goog.vec.Mat4.createFloat32();
+    this.projMatrix = goog.vec.Mat4.createFloat32();
+    this.updateViewProj()
+
+    // fragments fade from fogRange[0] to alpha=0 at fogRange[1]
+    var fogRange = new Float32Array([
+        this.cameraDistance - this.genomeRadius,
+        // multiplying genomeRadius by a factor here so that
+        // the far side isn't completely invisible
+        this.cameraDistance + (this.genomeRadius * 2.5)
+    ]);
+
     var thisObj = this;
     var dummyChroms = [
         { start: 0, end: 10000, name: "a" },
@@ -168,19 +180,6 @@ function Spinteny(container) {
 
     var synVerts = this.LCBsToVertices(dummyLCBs);
 
-    var camera = new GLOW.Camera({
-        aspect: this.containerSize.width / this.containerSize.height,
-        fov: this.cameraFOVY
-    });
-
-    // fragments fade from fogRange[0] to alpha=0 at fogRange[1]
-    var fogRange = new Float32Array([
-        this.cameraDistance - this.genomeRadius,
-        // multiplying genomeRadius by a factor here so that
-        // the far side isn't completely invisible
-        this.cameraDistance + (this.genomeRadius * 2.5)
-    ]);
-
     var anchorShaderInfo = {
         vertexShader: vertShader,
         fragmentShader: fragShader,
@@ -188,19 +187,17 @@ function Spinteny(container) {
         data: {
             // uniforms
 
-            orgTransforms: {
-                value: this.orgTransformFlat
-            },
-            cameraInverse: camera.inverse,
-            cameraProjection: camera.projection,
-            fogRange: { value: fogRange},
+            orgTransforms: { value: this.orgTransformFlat },
+            viewMatrix: { value: this.viewMatrix },
+            projMatrix: { value: this.projMatrix },
+            fogRange: { value: fogRange },
 
             // attributes
 
             vertex: synVerts.anchors.vertex,
             normal: synVerts.anchors.normal,
             org: synVerts.anchors.org,
-            center: triangleBarycenters(synVerts.anchors.vertex.length)
+            //center: triangleBarycenters(synVerts.anchors.vertex.length)
         },
         primitives: GL.TRIANGLES
     };
@@ -212,12 +209,10 @@ function Spinteny(container) {
         data: {
             // uniforms
 
-            orgTransforms: {
-                value: this.orgTransformFlat
-            },
-            cameraInverse: camera.inverse,
-            cameraProjection: camera.projection,
-            fogRange: { value: fogRange},
+            orgTransforms: { value: this.orgTransformFlat },
+            viewMatrix: { value: this.viewMatrix },
+            projMatrix: { value: this.projMatrix },
+            fogRange: { value: fogRange },
 
             // attributes
 
@@ -228,7 +223,7 @@ function Spinteny(container) {
             prevOrg: synVerts.twists.prevOrg,
             nextOrg: synVerts.twists.nextOrg,
             distance: synVerts.twists.distance,
-            center: triangleBarycenters(synVerts.twists.start.length)
+            //center: triangleBarycenters(synVerts.twists.start.length)
         },
         primitives: GL.TRIANGLES
     };
@@ -242,9 +237,6 @@ function Spinteny(container) {
     GL.blendFunc(GL.SRC_ALPHA, GL.ONE);
     GL.blendEquation(GL.FUNC_REVERSE_SUBTRACT);
 
-    camera.localMatrix.setPosition(0, 0, this.cameraDistance);
-    camera.update();
-
     this.context.cache.clear();
     this.context.clear();
     this.anchors.draw();
@@ -253,6 +245,23 @@ function Spinteny(container) {
     this.drag = {};
     this.setDragHandler();
 }
+
+Spinteny.prototype.updateViewProj = function() {
+    goog.vec.Mat4.makeLookAt(
+        this.viewMatrix,
+        [0, 0, this.cameraDistance], // eye point
+        [0, 0, -100], // center point
+        [0, 1, 0] // world up vector
+    );
+
+    goog.vec.Mat4.makePerspective(
+        this.projMatrix,
+        this.cameraFOVY * (Math.PI / 180), // y-axis FOV in radians
+        this.containerSize.width / this.containerSize.height, //aspect
+        0.1, // distance to near clipping plane
+        10000 // distance to far clipping plane
+    );
+};
 
 Spinteny.prototype.nearDistance = function() {
     return this.cameraDistance - this.genomeRadius;
