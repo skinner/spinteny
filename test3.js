@@ -127,8 +127,10 @@ function Spinteny(container) {
     this.minZoom = 0.8;
     this.maxZoom = 200000;
 
-    // there's some trig behind radiusFactor
-    // I wish I could draw you the diagram here
+    // there's some trig behind radiusFactor;
+    // a genomeRadius of (this.cameraDistance * radiusFactor)
+    // completely fills the container horizontally.
+    // I wish I could draw you the diagram here.
     var radiusFactor = ( 1 / ( (1 / Math.sin(this.fovX / 2)) - 1 ) );
     this.genomeRadius = (this.cameraDistance * radiusFactor) / this.zoomMultiplier;
 
@@ -269,31 +271,37 @@ function Spinteny(container) {
 Spinteny.prototype.addUI = function() {
     this.ui = {};
 
-    var zoomExp = 12;
     this.ui.zoomSlider = new goog.ui.Slider;
     this.ui.zoomSlider.setOrientation(goog.ui.Slider.Orientation.VERTICAL);
-    this.ui.zoomSlider.setMinimum(Math.pow(this.minZoom, 1/zoomExp));
-    this.ui.zoomSlider.setMaximum(Math.pow(this.maxZoom, 1/zoomExp));
-    this.ui.zoomSlider.setValue(Math.pow(this.minZoom, 1/zoomExp));
-    this.ui.zoomSlider.setUnitIncrement(0.005);
+
+    this.ui.zoomSlider.setUnitIncrement(0.03);
     this.ui.zoomSlider.setStep(null);
+    this.ui.zoomSlider.setMoveToPointEnabled(true);
+    //var zoomExp = 14;
+    //this.ui.zoomSlider.setMinimum(Math.pow(this.minZoom, 1/zoomExp));
+    this.ui.zoomSlider.setMinimum(1);
+    //this.ui.zoomSlider.setMaximum(Math.pow(this.maxZoom, 1/zoomExp));
+    this.ui.zoomSlider.setMaximum(Math.log(sp.maxZoom / sp.minZoom) + 1);
+    //this.ui.zoomSlider.setValue(Math.pow(this.minZoom, 1/zoomExp));
+    this.ui.zoomSlider.setValue(1);
+
     this.ui.zoomSlider.createDom();
     var el = this.ui.zoomSlider.getElement();
     el.style.position = "absolute";
     el.style.top = "20px";
     el.style.left = "0px";
     el.style.width = "40px";
-    el.style.bottom = "20px";//this.containerSize.height + "px";
+    el.style.bottom = "20px";
     this.ui.zoomSlider.render(this.container);
 
     var thisObj = this;
     function updateZoom() {
-        thisObj.zoomFactor = Math.pow(thisObj.ui.zoomSlider.getValue(),
-                                      zoomExp);
+        thisObj.zoomFactor = 
+            Math.exp(thisObj.ui.zoomSlider.getValue())
+            * (thisObj.minZoom / Math.E);
+        //thisObj.zoomFactor = Math.pow(thisObj.ui.zoomSlider.getValue(),
+        //                              zoomExp);
         thisObj.zoomFactor *= thisObj.zoomMultiplier;
-        //Math.pow(1/(1.3334 - Math.min(maxVal, thisObj.ui.zoomSlider.getValue())), 8);
-        //console.log(thisObj.ui.zoomSlider.getValue());
-        //console.log(thisObj.zoomFactor);
 
         for (var i = 0; i < thisObj.genomeCount; i++) {
             thisObj.zooms[i] = thisObj.zoomFactor;
