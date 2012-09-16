@@ -20,6 +20,33 @@
   <style type="text/css">
     html,body { height: 100%; margin: 0; padding: 0; }
     #container { margin: 0; padding: 0; }
+
+    .goog-slider-vertical,
+    .goog-slider-horizontal {
+      background-color: ThreeDFace;
+      position: relative;
+      overflow: hidden;
+    }
+    .goog-slider-thumb {
+      position: absolute;
+      background-color: ThreeDShadow;
+      overflow: hidden;
+    }
+
+    .goog-slider-vertical .goog-slider-thumb {
+      left: 0;
+      height: 40px;
+      width: 100%;
+    }
+
+    .goog-slider-horizontal .goog-slider-thumb {
+      top: 0;
+      width: 40px;
+      height: 100%;
+    }
+    .goog-slider-disabled {
+      background-color: lightgray
+    }
   </style>
 </head>
 

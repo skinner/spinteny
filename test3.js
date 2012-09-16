@@ -3,6 +3,8 @@ goog.require("goog.dom");
 goog.require("goog.debug.Logger");
 goog.require("goog.events");
 goog.require("goog.style");
+goog.require('goog.ui.Component');
+goog.require('goog.ui.Slider');
 goog.require("goog.vec.Mat4");
 goog.require("goog.vec.Vec3");
 
@@ -85,6 +87,8 @@ var fragShader =
     ].join( "\n" );
 
 function Spinteny(container) {
+    // for now, leaving in this global for console testing purposes
+    sp = this;
     this.container = goog.dom.getElement(container);
     this.containerSize = goog.style.getSize(this.container);
 
@@ -102,7 +106,7 @@ function Spinteny(container) {
     this.nearClip = 100;
     this.farClip = 10000;
 
-    this.cameraDistance = 400; // arbitrary, must be larger than nearClip
+    this.cameraDistance = 1000; // arbitrary, must be larger than nearClip
     this.aspect = this.containerSize.width / this.containerSize.height;
 
     this.fovY = 40 * (Math.PI / 180); // in radians
@@ -114,15 +118,29 @@ function Spinteny(container) {
 
     this.genomeCount = 3;
 
+    // zoomMultiplier is an experiment to try and work around numeric
+    // precision issues at high zoom levels.  Doesn't seem to
+    // make a difference, but I'm leaving it in for now in case
+    // it's useful for later experimentation
+    this.zoomMultiplier = 1;
+
+    this.minZoom = 0.8;
+    this.maxZoom = 200000;
+
     // there's some trig behind radiusFactor
     // I wish I could draw you the diagram here
     var radiusFactor = ( 1 / ( (1 / Math.sin(this.fovX / 2)) - 1 ) );
-    this.genomeRadius = this.cameraDistance * radiusFactor;
+    this.genomeRadius = (this.cameraDistance * radiusFactor) / this.zoomMultiplier;
 
     this.genomeHeight =
         this.heightAt(this.cameraDistance) / ((this.genomeCount * 2) - 1);
 
     this.chromSpacing = Math.PI / 18;
+
+    this.zoomFactor = this.zoomMultiplier;
+
+    this.rotations = new Float32Array(this.genomeCount);
+    this.zooms = new Float32Array(this.genomeCount);
 
     this.orgTransformFlat = new Float32Array(16 * this.genomeCount);
     this.orgTransforms = [];
@@ -130,25 +148,17 @@ function Spinteny(container) {
         this.orgTransforms[i] =
             this.orgTransformFlat.subarray(i * 16, (i * 16) + 16);
 
-        goog.vec.Mat4.makeIdentity(this.orgTransforms[i]);
-
-        goog.vec.Mat4.translate(
-            this.orgTransforms[i],
-            0,
-            (this.heightAt(this.cameraDistance) / 2)
-                - (i * 2 * this.genomeHeight),
-            -this.genomeRadius
-        );
+        this.rotations[i] = i * (Math.PI/18);
+        this.zooms[i] = this.zoomFactor;
+        this.updateTransform(i);
     }
-        
-    goog.vec.Mat4.rotateY(this.orgTransforms[1], Math.PI/18);
 
     // fragments fade from fogRange[0] to alpha=0 at fogRange[1]
     var fogRange = new Float32Array([
         this.cameraDistance,
         // multiplying genomeRadius by a factor here so that
         // the far side isn't completely invisible
-        this.genomeRadius * 4
+        this.genomeRadius * 2.5 * this.zoomMultiplier
     ]);
 
     var thisObj = this;
@@ -253,9 +263,69 @@ function Spinteny(container) {
 
     this.drag = {};
     this.setDragHandler();
-
-    this.draw();
+    this.addUI();
 }
+
+Spinteny.prototype.addUI = function() {
+    this.ui = {};
+
+    var zoomExp = 12;
+    this.ui.zoomSlider = new goog.ui.Slider;
+    this.ui.zoomSlider.setOrientation(goog.ui.Slider.Orientation.VERTICAL);
+    this.ui.zoomSlider.setMinimum(Math.pow(this.minZoom, 1/zoomExp));
+    this.ui.zoomSlider.setMaximum(Math.pow(this.maxZoom, 1/zoomExp));
+    this.ui.zoomSlider.setValue(Math.pow(this.minZoom, 1/zoomExp));
+    this.ui.zoomSlider.setUnitIncrement(0.005);
+    this.ui.zoomSlider.setStep(null);
+    this.ui.zoomSlider.createDom();
+    var el = this.ui.zoomSlider.getElement();
+    el.style.position = "absolute";
+    el.style.top = "20px";
+    el.style.left = "0px";
+    el.style.width = "40px";
+    el.style.bottom = "20px";//this.containerSize.height + "px";
+    this.ui.zoomSlider.render(this.container);
+
+    var thisObj = this;
+    function updateZoom() {
+        thisObj.zoomFactor = Math.pow(thisObj.ui.zoomSlider.getValue(),
+                                      zoomExp);
+        thisObj.zoomFactor *= thisObj.zoomMultiplier;
+        //Math.pow(1/(1.3334 - Math.min(maxVal, thisObj.ui.zoomSlider.getValue())), 8);
+        //console.log(thisObj.ui.zoomSlider.getValue());
+        //console.log(thisObj.zoomFactor);
+
+        for (var i = 0; i < thisObj.genomeCount; i++) {
+            thisObj.zooms[i] = thisObj.zoomFactor;
+            thisObj.updateTransform(i);
+        }
+
+        thisObj.draw();
+    }
+    this.ui.zoomSlider.addEventListener(
+        goog.ui.Component.EventType.CHANGE, updateZoom
+    );
+    updateZoom();
+};
+
+Spinteny.prototype.updateTransform = function(i) {
+    goog.vec.Mat4.makeIdentity(this.orgTransforms[i]);
+    
+    goog.vec.Mat4.translate(this.orgTransforms[i],
+                            0,
+                            (this.heightAt(this.cameraDistance) / 2)
+                            - (i * 2 * this.genomeHeight),
+                            -(this.genomeRadius * this.zoomMultiplier));
+                            //-(this.genomeRadius * this.zoomMultiplier * this.zooms[i])); // this version also zooms in Z
+
+    goog.vec.Mat4.scale(this.orgTransforms[i],
+                        this.zooms[i],
+                        1,
+                        this.zoomMultiplier);
+                        //this.zoomMultiplier * this.zooms[i]); // this version also zooms in Z
+
+    goog.vec.Mat4.rotateY(this.orgTransforms[i], this.rotations[i]);
+};
 
 Spinteny.prototype.draw = function() {
     this.context.cache.clear();
@@ -335,8 +405,7 @@ Spinteny.prototype.dragStart = function(event) {
                     * (this.genomeCount) ); //TODO: actually do this right
 
     this.drag.org = Math.min(this.drag.org, this.genomeCount - 1);
-    this.drag.initTransform = new Float32Array(16);
-    this.drag.initTransform.set(this.orgTransforms[this.drag.org]);
+    this.drag.initRotation = this.rotations[this.drag.org];
 
     this.canvas.addEventListener("mousemove", this.drag.moveHandler);
     this.canvas.addEventListener("mouseout", this.drag.endHandler);
@@ -372,9 +441,9 @@ Spinteny.prototype.dragMove = function(event) {
     var nearDeltaX =
         (clientDeltaX / this.containerSize.width)
         * this.widthAt(this.cameraDistance);
-    var angle = (nearDeltaX / this.genomeRadius);
-    this.orgTransforms[this.drag.org].set(this.drag.initTransform);
-    goog.vec.Mat4.rotateY(this.orgTransforms[this.drag.org], angle);
+    var angle = (nearDeltaX / (this.genomeRadius * this.zoomFactor));
+    this.rotations[this.drag.org] = this.drag.initRotation + angle;
+    this.updateTransform(this.drag.org);
     
     this.draw();
 
