@@ -283,7 +283,8 @@ Spinteny.prototype.addUI = function() {
     //this.ui.zoomSlider.setMinimum(Math.pow(this.minZoom, 1/zoomExp));
     this.ui.zoomSlider.setMinimum(1);
     //this.ui.zoomSlider.setMaximum(Math.pow(this.maxZoom, 1/zoomExp));
-    this.ui.zoomSlider.setMaximum(Math.log(sp.maxZoom / sp.minZoom) + 1);
+    this.ui.zoomSlider.setMaximum(Math.log(this.maxZoom / this.minZoom)
+                                  + 1);
     //this.ui.zoomSlider.setValue(Math.pow(this.minZoom, 1/zoomExp));
     this.ui.zoomSlider.setValue(1);
 
