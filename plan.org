@@ -1,0 +1,17 @@
+* shading
+* gridlines
+* real data
+** work out hierarchical rank/select data representation
+*** document?
+** implement generation tool
+*** find/write alignment parser
+** implement client-side
+* better transparency
+** depth peeling
+** and/or weighted average approx. OIT
+*** requires float textures/render targets
+overflows otherwise
+* location cursor on mousemove over genome
+* click to rotate to align on a specific location
+* genomic feature rendering
+* inertial scrolling
