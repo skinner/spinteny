@@ -75,7 +75,7 @@ var fragShader =
         "    const float epsilon = 0.02;",
         "    float z = gl_FragCoord.z / gl_FragCoord.w;",
         "    float a = (fogRange.y - z) / (fogRange.y - fogRange.x);",
-        "    a = pow(clamp(a, 0.0, 1.0), 4.0);",
+        "    a = pow(clamp(a, 0.0, 1.0), 3.0);",
         "    vec4 fragColor;",
         //"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
         //"        fragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
@@ -87,8 +87,6 @@ var fragShader =
     ].join( "\n" );
 
 function Spinteny(container) {
-    // for now, leaving in this global for console testing purposes
-    sp = this;
     this.container = goog.dom.getElement(container);
     this.containerSize = goog.style.getSize(this.container);
 
@@ -103,13 +101,13 @@ function Spinteny(container) {
     this.context.setupClear( { red: 1, green: 1, blue: 1, alpha: 1 } );
     this.container.appendChild(this.canvas);
 
-    this.nearClip = 100;
+    this.nearClip = 10;
     this.farClip = 10000;
 
-    this.cameraDistance = 1000; // arbitrary, must be larger than nearClip
+    this.cameraDistance = 100; // arbitrary, must be larger than nearClip
     this.aspect = this.containerSize.width / this.containerSize.height;
 
-    this.fovY = 40 * (Math.PI / 180); // in radians
+    this.fovY = 30 * (Math.PI / 180); // in radians
     this.fovX = 2 * Math.atan(Math.tan(this.fovY / 2) * this.aspect);
 
     this.viewMatrix = goog.vec.Mat4.createFloat32();
@@ -150,17 +148,21 @@ function Spinteny(container) {
         this.orgTransforms[i] =
             this.orgTransformFlat.subarray(i * 16, (i * 16) + 16);
 
-        this.rotations[i] = i * (Math.PI/18);
         this.zooms[i] = this.zoomFactor;
         this.updateTransform(i);
     }
+    // just for dummy data
+    this.rotations[1] = Math.PI/18;
+    this.rotations[2] = Math.PI/1.6;
+    this.updateTransform(1);
+    this.updateTransform(2);    
 
     // fragments fade from fogRange[0] to alpha=0 at fogRange[1]
     var fogRange = new Float32Array([
         this.cameraDistance,
         // multiplying genomeRadius by a factor here so that
         // the far side isn't completely invisible
-        this.genomeRadius * 2.5 * this.zoomMultiplier
+        this.genomeRadius * 4 * this.zoomMultiplier
     ]);
 
     var thisObj = this;
@@ -450,7 +452,10 @@ Spinteny.prototype.dragMove = function(event) {
         (clientDeltaX / this.containerSize.width)
         * this.widthAt(this.cameraDistance);
     var angle = (nearDeltaX / (this.genomeRadius * this.zoomFactor));
-    this.rotations[this.drag.org] = this.drag.initRotation + angle;
+    // the % (2 * Math.PI) here is to keep the rotation magnitudes
+    // low; otherwise the numeric precision issues are worse
+    this.rotations[this.drag.org] =
+        (this.drag.initRotation + angle) % (2 * Math.PI);
     this.updateTransform(this.drag.org);
     
     this.draw();
