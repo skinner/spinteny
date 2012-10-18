@@ -75,7 +75,7 @@ var fragShader =
         "    const float epsilon = 0.02;",
         "    float z = gl_FragCoord.z / gl_FragCoord.w;",
         "    float a = (fogRange.y - z) / (fogRange.y - fogRange.x);",
-        "    a = pow(clamp(a, 0.0, 1.0), 3.0);",
+        "    a = pow(clamp(a, 0.0, 1.0), 2.0);",
         "    vec4 fragColor;",
         //"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
         //"        fragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
@@ -157,12 +157,14 @@ function Spinteny(container) {
     this.updateTransform(1);
     this.updateTransform(2);    
 
+    // when calculating the far end of the fogRange, we multiply
+    // the distance by fogMultiplier; changing fogMultiplier
+    // changes how visible the distant parts of the cylinder are.
+    this.fogMultiplier = 1.5;
     // fragments fade from fogRange[0] to alpha=0 at fogRange[1]
-    var fogRange = new Float32Array([
+    this.fogRange = new Float32Array([
         this.cameraDistance,
-        // multiplying genomeRadius by a factor here so that
-        // the far side isn't completely invisible
-        this.genomeRadius * 4 * this.zoomMultiplier
+        this.genomeRadius * this.fogMultiplier * this.zoomMultiplier
     ]);
 
     var thisObj = this;
@@ -218,7 +220,7 @@ function Spinteny(container) {
             orgTransforms: { value: this.orgTransformFlat },
             viewMatrix: { value: this.viewMatrix },
             projMatrix: { value: this.projMatrix },
-            fogRange: { value: fogRange },
+            fogRange: { value: this.fogRange },
 
             // attributes
 
@@ -240,7 +242,7 @@ function Spinteny(container) {
             orgTransforms: { value: this.orgTransformFlat },
             viewMatrix: { value: this.viewMatrix },
             projMatrix: { value: this.projMatrix },
-            fogRange: { value: fogRange },
+            fogRange: { value: this.fogRange },
 
             // attributes
 
@@ -305,6 +307,8 @@ Spinteny.prototype.addUI = function() {
         //thisObj.zoomFactor = Math.pow(thisObj.ui.zoomSlider.getValue(),
         //                              zoomExp);
         thisObj.zoomFactor *= thisObj.zoomMultiplier;
+        thisObj.fogRange[1] = thisObj.fogRange[0] + ((thisObj.genomeRadius * thisObj.fogMultiplier * thisObj.zoomMultiplier) / thisObj.zoomFactor);
+
 
         for (var i = 0; i < thisObj.genomeCount; i++) {
             thisObj.zooms[i] = thisObj.zoomFactor;
@@ -328,12 +332,14 @@ Spinteny.prototype.updateTransform = function(i) {
                             - (i * 2 * this.genomeHeight),
                             -(this.genomeRadius * this.zoomMultiplier));
                             //-(this.genomeRadius * this.zoomMultiplier * this.zooms[i])); // this version also zooms in Z
+                            //-(this.genomeRadius * this.zoomMultiplier * (1 + ((this.zooms[i] - 1) * 0.01)))); // this version also zooms a little bit in Z
 
     goog.vec.Mat4.scale(this.orgTransforms[i],
                         this.zooms[i],
                         1,
                         this.zoomMultiplier);
                         //this.zoomMultiplier * this.zooms[i]); // this version also zooms in Z
+                        //this.zoomMultiplier * (1 + ((this.zooms[i] - 1) * 0.01))); // this version also zooms a little bit in Z
 
     goog.vec.Mat4.rotateY(this.orgTransforms[i], this.rotations[i]);
 };
