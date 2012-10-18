@@ -1,11 +1,15 @@
 * shading
 * gridlines
+* deal with precision issues
+** send base positions to shaders and transform them there?
+** emulate larger precision with multiple smaller precision numbers?
 * real data
 ** work out hierarchical rank/select data representation
 *** document?
 ** implement generation tool
 *** find/write alignment parser
 ** implement client-side
+* handle resize
 * better transparency
 ** depth peeling
 ** and/or weighted average approx. OIT
