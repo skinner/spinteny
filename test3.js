@@ -86,7 +86,7 @@ var fragShader =
         "}"
     ].join( "\n" );
 
-function Spinteny(container) {
+function Spinteny(container, orgChroms, LCBs) {
     this.container = goog.dom.getElement(container);
     this.containerSize = goog.style.getSize(this.container);
 
@@ -168,21 +168,11 @@ function Spinteny(container) {
     ]);
 
     var thisObj = this;
-    var dummyChroms = [
-        { start: 0, end: 10000, name: "a" },
-        { start: 0, end: 10000, name: "b" },
-        { start: 0, end: 10000, name: "c" },
-        { start: 0, end: 10000, name: "d" },
-        { start: 0, end: 10000, name: "e" },
-        { start: 0, end: 10000, name: "f" },
-        { start: 0, end: 10000, name: "g" }
-    ];
-
     this.mappers = 
-        [0, 1, 2, 3].map(
-            function(orgId) {
+        orgChroms.map(
+            function(chromData) {
                 return new CylMapper(
-                    dummyChroms,
+                    chromData,
                     new goog.vec.Vec3.createFromValues(0.0,
                                                        -thisObj.genomeHeight, 
                                                        0.0),
@@ -191,24 +181,8 @@ function Spinteny(container) {
                 );
             }
         );
-    
-    var dummyLCBs = [];
-    for (var chrId = 0; chrId < dummyChroms.length; chrId++) {
-        dummyLCBs.push([
-            [0, chrId, 0, 4000],
-            [1, chrId, 0, 4000],
-            [2, chrId, 0, 4000],
-                //[3, chrId, 0, 4000],
-        ]);
-        dummyLCBs.push([
-            [0, chrId, 6000, 10000],
-            [1, (chrId + 2) % dummyChroms.length, 6000, 10000],
-            [2, chrId, 10000, 6000],
-            //[3, chrId, 6000, 10000],
-        ]);
-    }
 
-    var synVerts = this.LCBsToVertices(dummyLCBs);
+    var synVerts = this.LCBsToVertices(LCBs);
 
     var anchorShaderInfo = {
         vertexShader: vertShader,
