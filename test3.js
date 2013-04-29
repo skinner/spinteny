@@ -21,10 +21,13 @@ var vertShader =
 
         //"varying vec3 vCenter;",
 
+        "varying vec3 vNormalEye;",
+
         "void main(void) {",
         //"  vCenter = center;",
-        "  mat4 transform = orgTransforms[int(org)];",
-        "  gl_Position = projMatrix * viewMatrix * transform * vec4( vertex, 1.0 );",
+        "  mat4 mvMatrix = viewMatrix * orgTransforms[int(org)];",
+        "  vNormalEye = mat3(mvMatrix) * normal;",
+        "  gl_Position = projMatrix * mvMatrix * vec4( vertex, 1.0 );",
         "}"
     ].join( "\n" );
 
@@ -61,12 +64,55 @@ var twistVertShader =
     ].join( "\n" );
 
 
+var shadeFragShader =
+    [
+        "#ifdef GL_ES",
+        "precision highp float;",
+        "#endif",               
+
+        "uniform vec3 ambColor;",
+        "uniform vec3 dirColor;",
+        "uniform vec3 dirVector;",
+        "uniform float ambWeight;",
+        "uniform float dirWeight;",
+        
+
+        "uniform    vec2    fogRange;",
+
+        "varying    vec3    vNormalEye;",
+
+        "void main() {",
+        "    float z = gl_FragCoord.z / gl_FragCoord.w;",
+        "    float a = (fogRange.y - z) / (fogRange.y - fogRange.x);",
+        "    a = pow(clamp(a, 0.0, 1.0), 2.0);",
+        "    vec4 fragColor;",
+        "    vec3 normal = normalize(vNormalEye);",
+        "    normal = normal * ( -1.0 + 2.0 * float( gl_FrontFacing ) );",
+
+        "    float diffuseDir = max(dot(normal, dirVector), 0.0);",
+        "    vec3 dirColor = dirWeight * diffuseDir * dirColor;",
+        "    vec3 ambColor = ambWeight * ambColor;",
+        "    vec3 color = dirColor + ambColor;",
+        //"    vec3 color = (0.5 * dirColor) + (0.5 * ambColor);",
+        "    fragColor = vec4(color, 1.0);",// 0.07 * a);",
+        //"    fragColor = vec4(diffuseWeight, diffuseWeight, diffuseWeight, 1.0);",
+        //"    const float epsilon = 0.02;",
+        //"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
+        //"        fragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
+        //"    } else {",
+        //"        fragColor = vec4(0.0, 0.0, 0.4, 0.07 * a);",
+        //"    }",
+        //"    gl_FragColor = vec4(vec3(1.0) - fragColor.rgb, fragColor.a);",
+        "    gl_FragColor = fragColor;",
+        "}"
+    ].join( "\n" );
+
 var fragShader =
     [
         "#ifdef GL_ES",
         "precision highp float;",
         "#endif",               
-        
+
         "uniform    vec2    fogRange;",
 
         //"varying    vec3    vCenter;",
@@ -80,11 +126,13 @@ var fragShader =
         //"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
         //"        fragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
         //"    } else {",
-        "        fragColor = vec4(0.0, 0.0, 0.4, 0.07 * a);",
+        "        fragColor = vec4(0.0, 0.0, 0.4, 0.2 * a);",
         //"    }",
-        "    gl_FragColor = vec4(vec3(1.0) - fragColor.rgb, fragColor.a);",
+        //"    gl_FragColor = vec4(vec3(1.0) - fragColor.rgb, fragColor.a);",
+        "    gl_FragColor = fragColor;",
         "}"
     ].join( "\n" );
+
 
 function Spinteny(container, orgChroms, LCBs) {
     this.container = goog.dom.getElement(container);
@@ -100,6 +148,13 @@ function Spinteny(container, orgChroms, LCBs) {
 
     this.context.setupClear( { red: 1, green: 1, blue: 1, alpha: 1 } );
     this.container.appendChild(this.canvas);
+
+    this.ambColor = goog.vec.Vec3.createFromValues(0.9, 0.9, 1.0);
+    this.dirColor = goog.vec.Vec3.createFromValues(0.7, 0.7, 0.9);
+    this.dirVector = goog.vec.Vec3.createFromValues(-0.3, 0.3, 1.0);
+    goog.vec.Vec3.normalize(this.dirVector, this.dirVector);
+    this.dirWeight = Float32Array([0.5]);
+    this.ambWeight = Float32Array([0.5]);
 
     this.nearClip = 10;
     this.farClip = 10000;
@@ -186,7 +241,7 @@ function Spinteny(container, orgChroms, LCBs) {
 
     var anchorShaderInfo = {
         vertexShader: vertShader,
-        fragmentShader: fragShader,
+        fragmentShader: shadeFragShader,
 
         data: {
             // uniforms
@@ -195,6 +250,12 @@ function Spinteny(container, orgChroms, LCBs) {
             viewMatrix: { value: this.viewMatrix },
             projMatrix: { value: this.projMatrix },
             fogRange: { value: this.fogRange },
+
+            ambColor: { value: this.ambColor },
+            ambWeight: { value: this.ambWeight },
+            dirColor: { value: this.dirColor },
+            dirWeight: { value: this.dirWeight },
+            dirVector: { value: this.dirVector },
 
             // attributes
 
@@ -236,10 +297,10 @@ function Spinteny(container, orgChroms, LCBs) {
     this.twists = new GLOW.Shader(twistShaderInfo);
 
     GL.disable(GL.CULL_FACE);
-    GL.disable(GL.DEPTH_TEST);
-    GL.enable(GL.BLEND);
-    GL.blendFunc(GL.SRC_ALPHA, GL.ONE);
-    GL.blendEquation(GL.FUNC_REVERSE_SUBTRACT);
+    //GL.disable(GL.DEPTH_TEST);
+    //GL.enable(GL.BLEND);
+    //GL.blendFunc(GL.SRC_ALPHA, GL.ONE);
+    //GL.blendEquation(GL.FUNC_REVERSE_SUBTRACT);
 
     this.drag = {};
     this.setDragHandler();
