@@ -17,14 +17,10 @@ var vertShader =
         "attribute  vec3    vertex;",
         "attribute  vec3    normal;",
         "attribute  float   org;",
-        //"attribute  vec3    center;",
-
-        //"varying vec3 vCenter;",
 
         "varying vec3 vNormalEye;",
 
         "void main(void) {",
-        //"  vCenter = center;",
         "  mat4 mvMatrix = viewMatrix * orgTransforms[int(org)];",
         "  vNormalEye = mat3(mvMatrix) * normal;",
         "  gl_Position = projMatrix * mvMatrix * vec4( vertex, 1.0 );",
@@ -44,22 +40,26 @@ var twistVertShader =
         "attribute  float   prevOrg;",
         "attribute  float   nextOrg;",
         "attribute  float   distance;",
-        //"attribute  vec3    center;",
-
-        //"varying vec3 vCenter;",
+        "attribute  float   normMult;",
+        "varying vec3 vNormalEye;",
 
         "void main(void) {",
-        //"  vCenter = center;",
 
         "  mat4 startTrans = orgTransforms[int(prevOrg)];",
         "  mat4 endTrans = orgTransforms[int(nextOrg)];",
-        "  vec4 tStart = startTrans * vec4(start, 1.0);",
-        "  vec4 tEnd = endTrans * vec4(end, 1.0);",
-        "  vec4 toStart = startTrans * vec4(otherStart, 1.0);",
-        "  vec4 toEnd = endTrans * vec4(otherEnd, 1.0);",
-        "  vec4 pos = tStart + (distance * (tEnd - tStart));",
-        // TODO calculate normal using otherStart and otherEnd
-        "  gl_Position = projMatrix * viewMatrix * vec4(pos.xyz, 1.0);",
+        "  vec4 thisStart = startTrans * vec4(start, 1.0);",
+        "  vec4 thisEnd = endTrans * vec4(end, 1.0);",
+        "  vec4 thisPos = thisStart + (distance * (thisEnd - thisStart));",
+
+        "  vec4 otherStart = startTrans * vec4(otherStart, 1.0);",
+        "  vec4 otherEnd = endTrans * vec4(otherEnd, 1.0);",
+        "  vec4 otherPos = otherStart + (distance * (otherEnd - otherStart));",
+
+        "  vec4 thisVec = thisEnd - thisStart;",
+        "  vec4 otherVec = otherPos - thisPos;",
+        "  vNormalEye = normMult * cross(thisVec.xyz, otherVec.xyz);",
+
+        "  gl_Position = projMatrix * viewMatrix * vec4(thisPos.xyz, 1.0);",
         "}"
     ].join( "\n" );
 
@@ -75,64 +75,30 @@ var shadeFragShader =
         "uniform vec3 dirVector;",
         "uniform float ambWeight;",
         "uniform float dirWeight;",
-        
 
         "uniform    vec2    fogRange;",
 
         "varying    vec3    vNormalEye;",
 
         "void main() {",
+        "    const float LOG2 = 1.442695;",
+        "    float fogDensity = 0.3;",
         "    float z = gl_FragCoord.z / gl_FragCoord.w;",
-        "    float a = (fogRange.y - z) / (fogRange.y - fogRange.x);",
-        "    a = pow(clamp(a, 0.0, 1.0), 2.0);",
-        "    vec4 fragColor;",
+        "    float fogFactor = (fogRange.y - z) / (fogRange.y - fogRange.x);",
+        "    fogFactor = clamp(fogFactor, 0.0, 1.0);",
+
         "    vec3 normal = normalize(vNormalEye);",
+        // flip normal for rear-facing fragments, because we want our
+        // materials to be double-sided
         "    normal = normal * ( -1.0 + 2.0 * float( gl_FrontFacing ) );",
 
         "    float diffuseDir = max(dot(normal, dirVector), 0.0);",
         "    vec3 dirColor = dirWeight * diffuseDir * dirColor;",
         "    vec3 ambColor = ambWeight * ambColor;",
         "    vec3 color = dirColor + ambColor;",
-        //"    vec3 color = (0.5 * dirColor) + (0.5 * ambColor);",
-        "    fragColor = vec4(color, 1.0);",// 0.07 * a);",
-        //"    fragColor = vec4(diffuseWeight, diffuseWeight, diffuseWeight, 1.0);",
-        //"    const float epsilon = 0.02;",
-        //"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
-        //"        fragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
-        //"    } else {",
-        //"        fragColor = vec4(0.0, 0.0, 0.4, 0.07 * a);",
-        //"    }",
-        //"    gl_FragColor = vec4(vec3(1.0) - fragColor.rgb, fragColor.a);",
-        "    gl_FragColor = fragColor;",
+        "    gl_FragColor = vec4(mix(vec3(1.0), color, fogFactor), 1.0);",
         "}"
     ].join( "\n" );
-
-var fragShader =
-    [
-        "#ifdef GL_ES",
-        "precision highp float;",
-        "#endif",               
-
-        "uniform    vec2    fogRange;",
-
-        //"varying    vec3    vCenter;",
-
-        "void main() {",
-        "    const float epsilon = 0.02;",
-        "    float z = gl_FragCoord.z / gl_FragCoord.w;",
-        "    float a = (fogRange.y - z) / (fogRange.y - fogRange.x);",
-        "    a = pow(clamp(a, 0.0, 1.0), 2.0);",
-        "    vec4 fragColor;",
-        //"    if (any(lessThan(vCenter, vec3(epsilon)))) {",
-        //"        fragColor = vec4(0.0, 0.0, 0.0, 0.8 * a);",
-        //"    } else {",
-        "        fragColor = vec4(0.0, 0.0, 0.4, 0.2 * a);",
-        //"    }",
-        //"    gl_FragColor = vec4(vec3(1.0) - fragColor.rgb, fragColor.a);",
-        "    gl_FragColor = fragColor;",
-        "}"
-    ].join( "\n" );
-
 
 function Spinteny(container, orgChroms, LCBs) {
     this.container = goog.dom.getElement(container);
@@ -149,7 +115,7 @@ function Spinteny(container, orgChroms, LCBs) {
     this.context.setupClear( { red: 1, green: 1, blue: 1, alpha: 1 } );
     this.container.appendChild(this.canvas);
 
-    this.ambColor = goog.vec.Vec3.createFromValues(0.9, 0.9, 1.0);
+    this.ambColor = goog.vec.Vec3.createFromValues(0.8, 0.8, 1.0);
     this.dirColor = goog.vec.Vec3.createFromValues(0.7, 0.7, 0.9);
     this.dirVector = goog.vec.Vec3.createFromValues(-0.3, 0.3, 1.0);
     goog.vec.Vec3.normalize(this.dirVector, this.dirVector);
@@ -215,8 +181,9 @@ function Spinteny(container, orgChroms, LCBs) {
     // when calculating the far end of the fogRange, we multiply
     // the distance by fogMultiplier; changing fogMultiplier
     // changes how visible the distant parts of the cylinder are.
-    this.fogMultiplier = 1.5;
-    // fragments fade from fogRange[0] to alpha=0 at fogRange[1]
+    this.fogMultiplier = 1.3;
+    // fragments fade from their normal color at fogRange[0] to
+    // white at fogRange[1]
     this.fogRange = new Float32Array([
         this.cameraDistance,
         this.genomeRadius * this.fogMultiplier * this.zoomMultiplier
@@ -269,7 +236,7 @@ function Spinteny(container, orgChroms, LCBs) {
 
     var twistShaderInfo = {
         vertexShader: twistVertShader,
-        fragmentShader: fragShader,
+        fragmentShader: shadeFragShader,
 
         data: {
             // uniforms
@@ -278,6 +245,12 @@ function Spinteny(container, orgChroms, LCBs) {
             viewMatrix: { value: this.viewMatrix },
             projMatrix: { value: this.projMatrix },
             fogRange: { value: this.fogRange },
+
+            ambColor: { value: this.ambColor },
+            ambWeight: { value: this.ambWeight },
+            dirColor: { value: this.dirColor },
+            dirWeight: { value: this.dirWeight },
+            dirVector: { value: this.dirVector },
 
             // attributes
 
@@ -288,6 +261,7 @@ function Spinteny(container, orgChroms, LCBs) {
             prevOrg: synVerts.twists.prevOrg,
             nextOrg: synVerts.twists.nextOrg,
             distance: synVerts.twists.distance,
+            normMult: synVerts.twists.normMult,
             //center: triangleBarycenters(synVerts.twists.start.length)
         },
         primitives: GL.TRIANGLES
@@ -297,10 +271,6 @@ function Spinteny(container, orgChroms, LCBs) {
     this.twists = new GLOW.Shader(twistShaderInfo);
 
     GL.disable(GL.CULL_FACE);
-    //GL.disable(GL.DEPTH_TEST);
-    //GL.enable(GL.BLEND);
-    //GL.blendFunc(GL.SRC_ALPHA, GL.ONE);
-    //GL.blendEquation(GL.FUNC_REVERSE_SUBTRACT);
 
     this.drag = {};
     this.setDragHandler();
@@ -636,7 +606,7 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
         org:    new Float32Array(anchVertCount)
     };
 
-    var trisPerTwist = 24;
+    var trisPerTwist = 48;
     var twistVertCount = trisPerTwist * 3 * numTwists;
     var twists = {
         start:      new Float32Array(3 * twistVertCount),
@@ -645,7 +615,8 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
         otherEnd:   new Float32Array(3 * twistVertCount),
         prevOrg:    new Float32Array(twistVertCount),
         nextOrg:    new Float32Array(twistVertCount),
-        distance:   new Float32Array(twistVertCount)
+        distance:   new Float32Array(twistVertCount),
+        normMult:   new Float32Array(twistVertCount)
     };
 
     var curAnchor = 0;
@@ -726,34 +697,34 @@ Spinteny.prototype.addTwistTriPair = function(twists, twistCorners,
     this.addTwistVert(twists, twistCorners[0], twistCorners[2],
                       twistCorners[1], twistCorners[3],
                       prevOrg, nextOrg, startingVert,
-                      startDistance);
+                      startDistance, 1);
     this.addTwistVert(twists, twistCorners[0], twistCorners[2],
                       twistCorners[1], twistCorners[3],
                       prevOrg, nextOrg, startingVert + 1,
-                      endDistance);
+                      endDistance, 1);
     this.addTwistVert(twists, twistCorners[1], twistCorners[3],
                       twistCorners[1], twistCorners[3],
                       prevOrg, nextOrg, startingVert + 2,
-                      startDistance);
+                      startDistance, -1);
     // tri 1
     this.addTwistVert(twists, twistCorners[1], twistCorners[3],
                       twistCorners[0], twistCorners[2],
                       prevOrg, nextOrg, startingVert + 3,
-                      startDistance);
+                      startDistance, -1);
     this.addTwistVert(twists, twistCorners[0], twistCorners[2],
                       twistCorners[1], twistCorners[3],
                       prevOrg, nextOrg, startingVert + 4,
-                      endDistance);
+                      endDistance, 1);
     this.addTwistVert(twists, twistCorners[1], twistCorners[3],
                       twistCorners[1], twistCorners[3],
                       prevOrg, nextOrg, startingVert + 5,
-                      endDistance);
+                      endDistance, -1);
 };
 
 Spinteny.prototype.addTwistVert = function(twists, start, end,
                                            otherStart, otherEnd,
                                            prevOrg, nextOrg,
-                                           vertIndex, distance) {
+                                           vertIndex, distance, normMult) {
     twists.start.set(start, vertIndex * 3);
     twists.end.set(end, vertIndex * 3);
     twists.otherStart.set(otherStart, vertIndex * 3);
@@ -761,6 +732,7 @@ Spinteny.prototype.addTwistVert = function(twists, start, end,
     twists.prevOrg[vertIndex] = prevOrg;
     twists.nextOrg[vertIndex] = nextOrg;
     twists.distance[vertIndex] = distance;
+    twists.normMult[vertIndex] = normMult;
 };
 
 /**
