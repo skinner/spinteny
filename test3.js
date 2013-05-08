@@ -3,25 +3,26 @@ goog.require("goog.dom");
 goog.require("goog.debug.Logger");
 goog.require("goog.events");
 goog.require("goog.style");
-goog.require('goog.ui.Component');
-goog.require('goog.ui.Slider');
+goog.require("goog.ui.Component");
+goog.require("goog.ui.Slider");
 goog.require("goog.vec.Mat4");
 goog.require("goog.vec.Vec3");
 
-var vertShader = 
+var anchorVertShader = 
     [
-        "uniform    mat4    orgTransforms[8];",
-        "uniform    mat4    viewMatrix;",
-        "uniform    mat4    projMatrix;",
+        "uniform  mat4  orgTransforms[8];",
+        "uniform  mat4  viewMatrix;",
+        "uniform  mat4  projMatrix;",
 
-        "attribute  vec3    vertex;",
-        "attribute  vec3    normal;",
-        "attribute  float   org;",
+        "attribute  vec3   vertex;",
+        "attribute  vec3   normal;",
+        "attribute  float  org;",
 
-        "varying vec3 vNormalEye;",
+        "varying  vec3   vNormalEye;",
 
         "void main(void) {",
         "  mat4 mvMatrix = viewMatrix * orgTransforms[int(org)];",
+        //"  vNormalEye = transpose(inverse(mat3(mvMatrix))) * normal;",
         "  vNormalEye = mat3(mvMatrix) * normal;",
         "  gl_Position = projMatrix * mvMatrix * vec4( vertex, 1.0 );",
         "}"
@@ -44,6 +45,16 @@ var twistVertShader =
         "varying vec3 vNormalEye;",
 
         "void main(void) {",
+        // twist vertices are all along the left and right sides of
+        // each twist.  thisStart and thisEnd are the start and end
+        // points of the line this vertex is on.  otherStart and
+        // otherEnd are the start and end points of the opposide side
+        // of the twist.  distance ([0, 1]) is how far along those
+        // lines this vertex goes.
+        //
+        // To calculate the normal, we take the cross product of the
+        // line we're on and a vector across the twist to the point at
+        // the same "distance" along the other edge of the twist.
 
         "  mat4 startTrans = orgTransforms[int(prevOrg)];",
         "  mat4 endTrans = orgTransforms[int(nextOrg)];",
@@ -64,25 +75,22 @@ var twistVertShader =
     ].join( "\n" );
 
 
-var shadeFragShader =
+var alignFragShader =
     [
         "#ifdef GL_ES",
         "precision highp float;",
         "#endif",               
 
-        "uniform vec3 ambColor;",
-        "uniform vec3 dirColor;",
-        "uniform vec3 dirVector;",
-        "uniform float ambWeight;",
-        "uniform float dirWeight;",
+        "uniform  vec3   ambColor;",
+        "uniform  vec3   dirColor;",
+        "uniform  vec3   dirVector;",
+        "uniform  float  ambWeight;",
+        "uniform  float  dirWeight;",
+        "uniform  vec2   fogRange;",
 
-        "uniform    vec2    fogRange;",
-
-        "varying    vec3    vNormalEye;",
+        "varying  vec3   vNormalEye;",
 
         "void main() {",
-        "    const float LOG2 = 1.442695;",
-        "    float fogDensity = 0.3;",
         "    float z = gl_FragCoord.z / gl_FragCoord.w;",
         "    float fogFactor = (fogRange.y - z) / (fogRange.y - fogRange.x);",
         "    fogFactor = clamp(fogFactor, 0.0, 1.0);",
@@ -92,8 +100,8 @@ var shadeFragShader =
         // materials to be double-sided
         "    normal = normal * ( -1.0 + 2.0 * float( gl_FrontFacing ) );",
 
-        "    float diffuseDir = max(dot(normal, dirVector), 0.0);",
-        "    vec3 dirColor = dirWeight * diffuseDir * dirColor;",
+        "    float dirDiffuse = max(dot(normal, dirVector), 0.0);",
+        "    vec3 dirColor = dirWeight * dirDiffuse * dirColor;",
         "    vec3 ambColor = ambWeight * ambColor;",
         "    vec3 color = dirColor + ambColor;",
         "    gl_FragColor = vec4(mix(vec3(1.0), color, fogFactor), 1.0);",
@@ -115,12 +123,12 @@ function Spinteny(container, orgChroms, LCBs) {
     this.context.setupClear( { red: 1, green: 1, blue: 1, alpha: 1 } );
     this.container.appendChild(this.canvas);
 
-    this.ambColor = goog.vec.Vec3.createFromValues(0.8, 0.8, 1.0);
-    this.dirColor = goog.vec.Vec3.createFromValues(0.7, 0.7, 0.9);
-    this.dirVector = goog.vec.Vec3.createFromValues(-0.3, 0.3, 1.0);
+    this.ambColor = goog.vec.Vec3.createFromValues(0.75, 0.75, 0.85);
+    this.dirColor = goog.vec.Vec3.createFromValues(0.70, 0.75, 0.85);
+    this.dirVector = goog.vec.Vec3.createFromValues(-0.4, 0.1, 1.0);
     goog.vec.Vec3.normalize(this.dirVector, this.dirVector);
-    this.dirWeight = Float32Array([0.5]);
-    this.ambWeight = Float32Array([0.5]);
+    this.dirWeight = new Float32Array([0.5]);
+    this.ambWeight = new Float32Array([0.5]);
 
     this.nearClip = 10;
     this.farClip = 10000;
@@ -128,7 +136,7 @@ function Spinteny(container, orgChroms, LCBs) {
     this.cameraDistance = 100; // arbitrary, must be larger than nearClip
     this.aspect = this.containerSize.width / this.containerSize.height;
 
-    this.fovY = 30 * (Math.PI / 180); // in radians
+    this.fovY = 20 * (Math.PI / 180); // in radians
     this.fovX = 2 * Math.atan(Math.tan(this.fovY / 2) * this.aspect);
 
     this.viewMatrix = goog.vec.Mat4.createFloat32();
@@ -181,12 +189,14 @@ function Spinteny(container, orgChroms, LCBs) {
     // when calculating the far end of the fogRange, we multiply
     // the distance by fogMultiplier; changing fogMultiplier
     // changes how visible the distant parts of the cylinder are.
-    this.fogMultiplier = 1.3;
+    this.fogMultiplier = 1.8;
     // fragments fade from their normal color at fogRange[0] to
     // white at fogRange[1]
     this.fogRange = new Float32Array([
         this.cameraDistance,
-        this.genomeRadius * this.fogMultiplier * this.zoomMultiplier
+        this.cameraDistance + (this.genomeRadius
+                               * this.fogMultiplier
+                               * this.zoomMultiplier)
     ]);
 
     var thisObj = this;
@@ -207,8 +217,8 @@ function Spinteny(container, orgChroms, LCBs) {
     var synVerts = this.LCBsToVertices(LCBs);
 
     var anchorShaderInfo = {
-        vertexShader: vertShader,
-        fragmentShader: shadeFragShader,
+        vertexShader: anchorVertShader,
+        fragmentShader: alignFragShader,
 
         data: {
             // uniforms
@@ -229,14 +239,13 @@ function Spinteny(container, orgChroms, LCBs) {
             vertex: synVerts.anchors.vertex,
             normal: synVerts.anchors.normal,
             org: synVerts.anchors.org,
-            //center: triangleBarycenters(synVerts.anchors.vertex.length)
         },
         primitives: GL.TRIANGLES
     };
 
     var twistShaderInfo = {
         vertexShader: twistVertShader,
-        fragmentShader: shadeFragShader,
+        fragmentShader: alignFragShader,
 
         data: {
             // uniforms
@@ -262,9 +271,8 @@ function Spinteny(container, orgChroms, LCBs) {
             nextOrg: synVerts.twists.nextOrg,
             distance: synVerts.twists.distance,
             normMult: synVerts.twists.normMult,
-            //center: triangleBarycenters(synVerts.twists.start.length)
         },
-        primitives: GL.TRIANGLES
+        primitives: GL.TRIANGLE_STRIP
     };
 
     this.anchors = new GLOW.Shader(anchorShaderInfo);
@@ -309,11 +317,9 @@ Spinteny.prototype.addUI = function() {
         thisObj.zoomFactor = 
             Math.exp(thisObj.ui.zoomSlider.getValue())
             * (thisObj.minZoom / Math.E);
-        //thisObj.zoomFactor = Math.pow(thisObj.ui.zoomSlider.getValue(),
-        //                              zoomExp);
         thisObj.zoomFactor *= thisObj.zoomMultiplier;
-        thisObj.fogRange[1] = thisObj.fogRange[0] + ((thisObj.genomeRadius * thisObj.fogMultiplier * thisObj.zoomMultiplier) / thisObj.zoomFactor);
-
+        //thisObj.fogRange[1] = thisObj.fogRange[0] + ((thisObj.genomeRadius * thisObj.fogMultiplier * thisObj.zoomMultiplier) / thisObj.zoomFactor);
+        //thisObj.fogRange[1] = thisObj.fogRange[0] + (thisObj.genomeRadius * thisObj.fogMultiplier * thisObj.zoomMultiplier);
 
         for (var i = 0; i < thisObj.genomeCount; i++) {
             thisObj.zooms[i] = thisObj.zoomFactor;
@@ -565,19 +571,24 @@ Spinteny.prototype.matchToQuad = function(match) {
  * { 
  *     anchors:
  *         {
- *             vertex: 
- *             normal:
- *             org:
+ *             vertex: vertex x, y, z coord (model space)
+ *             normal: vertex normal x, y, z
+ *             org: organism ID [ 0..(# of genomes) )
  *         }
  *     twists:
  *         {
- *             start
- *             end
- *             otherStart
- *             otherEnd
- *             prevOrg
- *             nextOrg
- *             distance
+ *             start: position of the start of the line this vertex is on
+ *                    (model space)
+ *             end: position of the end of the line this vertex is on
+ *                  (model space)
+ *             otherStart: position of the start of the other edge of the twist
+ *                        (model space)
+ *             otherEnd: position of the end of the other edge of the twist
+ *                      (model space)
+ *             prevOrg: organism ID of the previous genome
+ *             nextOrg: organism ID of the next genome
+ *             distance: how far along the line from start to end to
+ *                       place this vertex
  *         }
  * }
  *
@@ -599,6 +610,8 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
     // using drawArrays means 6 vertices per face
     var anchVertCount = 6 * numAnchors;
     var anchors = {
+        // multiplying by 3 here because each vertex/normal has
+        // (x, y, z) components
         vertex: new Float32Array(3 * anchVertCount),
         normal: new Float32Array(3 * anchVertCount),
         // ideally, org would be an unsigned int (or short or byte) array,
@@ -606,21 +619,23 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
         org:    new Float32Array(anchVertCount)
     };
 
-    var trisPerTwist = 48;
-    var twistVertCount = trisPerTwist * 3 * numTwists;
+    var rowsPerTwist = 11;
+    // two vertices per row, plus 4 vertices for degenerate triangles
+    var vertsPerTwist = (rowsPerTwist * 2) + 4
+    var twistVertTotal = vertsPerTwist * numTwists;
     var twists = {
-        start:      new Float32Array(3 * twistVertCount),
-        end:        new Float32Array(3 * twistVertCount),
-        otherStart: new Float32Array(3 * twistVertCount),
-        otherEnd:   new Float32Array(3 * twistVertCount),
-        prevOrg:    new Float32Array(twistVertCount),
-        nextOrg:    new Float32Array(twistVertCount),
-        distance:   new Float32Array(twistVertCount),
-        normMult:   new Float32Array(twistVertCount)
+        start:      new Float32Array(3 * twistVertTotal),
+        end:        new Float32Array(3 * twistVertTotal),
+        otherStart: new Float32Array(3 * twistVertTotal),
+        otherEnd:   new Float32Array(3 * twistVertTotal),
+        prevOrg:    new Float32Array(twistVertTotal),
+        nextOrg:    new Float32Array(twistVertTotal),
+        distance:   new Float32Array(twistVertTotal),
+        normMult:   new Float32Array(twistVertTotal)
     };
 
     var curAnchor = 0;
-    var curTwist = 0;
+    var twistVert = 0;
     var orgId = 0, chrId = 1, start = 2, end = 3;
 
     for (var blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
@@ -664,16 +679,56 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
             var prevOrg = org;
             org = block[match][orgId];
 
-            for (var tri = 0; tri < trisPerTwist; tri += 2) {
-                this.addTwistTriPair(twists, twistCorners,
-                                     prevOrg, org,
-                                     curTwist, tri,
-                                     trisPerTwist,
-                                     tri / trisPerTwist,
-                                     (tri + 2) / trisPerTwist);
+            // Using GL.TRIANGLE_STRIP is a win, in that it lowers the
+            // number of vertices that have to be sent to the
+            // hardware, and tells the hardware more about shared
+            // edges between triangles.  The downside is that if we
+            // want to draw a bunch of disconnected strips with one
+            // draw call, we need to insert extra vertices at the
+            // beginning and end of each twist, which make degenerate
+            // (zero-area) triangles that don't show up.  Otherwise
+            // all the twists would be connected into one long strip.
+            //
+            // the first extra vertex is just a repeat of the first
+            // vertex of the twist.
+            this.addTwistVert(twists,
+                              oldAnchorVerts[2], anchorVerts[0],
+                              oldAnchorVerts[3], anchorVerts[1],
+                              prevOrg, org, twistVert++,
+                              0,  1);
+            for (var row = 0; row < rowsPerTwist; row++) {
+                this.addTwistVert(twists,
+                                  oldAnchorVerts[2], anchorVerts[0],
+                                  oldAnchorVerts[3], anchorVerts[1],
+                                  prevOrg, org, twistVert++, 
+                                  row / (rowsPerTwist - 1),
+                                  1);
+                this.addTwistVert(twists,
+                                  oldAnchorVerts[3], anchorVerts[1],
+                                  oldAnchorVerts[2], anchorVerts[0],
+                                  prevOrg, org, twistVert++,
+                                  row / (rowsPerTwist - 1),
+                                  -1);
             }
-
-            curTwist++;
+            // verts for degenerate triangles: the last vertex of the
+            // twist, repeated three times
+            // (it used to be repeated only twice, but that flipped the winding
+            // direction for each twist)
+            this.addTwistVert(twists,
+                              oldAnchorVerts[3], anchorVerts[1],
+                              oldAnchorVerts[2], anchorVerts[0],
+                              prevOrg, org, twistVert++,
+                              1, -1);
+            this.addTwistVert(twists,
+                              oldAnchorVerts[3], anchorVerts[1],
+                              oldAnchorVerts[2], anchorVerts[0],
+                              prevOrg, org, twistVert++,
+                              1, -1);
+            this.addTwistVert(twists,
+                              oldAnchorVerts[3], anchorVerts[1],
+                              oldAnchorVerts[2], anchorVerts[0],
+                              prevOrg, org, twistVert++,
+                              1, -1);
 
             trianglesForQuad(anchorVerts, anchors.vertex, curAnchor * 18);
             repeat(org, anchors.org, curAnchor * 6, 6);
@@ -684,41 +739,6 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
     calcArrayFaceNormals(anchors.vertex, anchors.normal);
 
     return { anchors: anchors, twists: twists };
-};
-
-Spinteny.prototype.addTwistTriPair = function(twists, twistCorners,
-                                              prevOrg, nextOrg,
-                                              curTwist, tri,
-                                              trisPerTwist,
-                                              startDistance,
-                                              endDistance) {
-    var startingVert = ((curTwist * trisPerTwist) + tri) * 3;
-    // tri 0
-    this.addTwistVert(twists, twistCorners[0], twistCorners[2],
-                      twistCorners[1], twistCorners[3],
-                      prevOrg, nextOrg, startingVert,
-                      startDistance, 1);
-    this.addTwistVert(twists, twistCorners[0], twistCorners[2],
-                      twistCorners[1], twistCorners[3],
-                      prevOrg, nextOrg, startingVert + 1,
-                      endDistance, 1);
-    this.addTwistVert(twists, twistCorners[1], twistCorners[3],
-                      twistCorners[1], twistCorners[3],
-                      prevOrg, nextOrg, startingVert + 2,
-                      startDistance, -1);
-    // tri 1
-    this.addTwistVert(twists, twistCorners[1], twistCorners[3],
-                      twistCorners[0], twistCorners[2],
-                      prevOrg, nextOrg, startingVert + 3,
-                      startDistance, -1);
-    this.addTwistVert(twists, twistCorners[0], twistCorners[2],
-                      twistCorners[1], twistCorners[3],
-                      prevOrg, nextOrg, startingVert + 4,
-                      endDistance, 1);
-    this.addTwistVert(twists, twistCorners[1], twistCorners[3],
-                      twistCorners[1], twistCorners[3],
-                      prevOrg, nextOrg, startingVert + 5,
-                      endDistance, -1);
 };
 
 Spinteny.prototype.addTwistVert = function(twists, start, end,
