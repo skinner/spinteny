@@ -100,7 +100,8 @@ function Spinteny(container, orgChroms, LCBs) {
 
     this.context = new GLOW.Context({
         width: this.containerSize.width,
-        height: this.containerSize.height
+        height: this.containerSize.height,
+        antialias: true
     });
     this.canvas = this.context.domElement;
     this.canvas.style.width = "100%";
@@ -142,7 +143,7 @@ function Spinteny(container, orgChroms, LCBs) {
 
     // a genomeRadius of (this.cameraDistance * radiusFactor)
     // completely fills the container horizontally.
-    // see dev-notes/genome-radius.jpg
+    // see dev-notes/genome-radius.png
     var radiusFactor = ( 1 / ( (1 / Math.sin(this.fovX / 2)) - 1 ) );
     this.genomeRadius = (this.cameraDistance * radiusFactor) / this.zoomMultiplier;
 
@@ -555,8 +556,6 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
         // that will visually represent the match
         this.matchToQuad(block[match], anchorVerts);
 
-        // set anchors.org to this organism ID for all 6 vertices
-        // in the quad
         var org = block[match][orgId];
 
         // Using GL.TRIANGLE_STRIP is a win, in that it lowers the
