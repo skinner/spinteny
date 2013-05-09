@@ -1,21 +1,28 @@
-* shading
-* gridlines
-* deal with precision issues
-** send base positions to shaders and transform them there?
-** emulate larger precision with multiple smaller precision numbers?
-* real data
-** work out hierarchical rank/select data representation
-*** document?
-** implement generation tool
-*** find/write alignment parser
-** implement client-side
-* handle resize
-* better transparency
-** depth peeling
-** and/or weighted average approx. OIT
-*** requires float textures/render targets
+* to do
+** gridlines
+** deal with precision issues
+*** send base positions to shaders and transform them there?
+*** emulate larger precision with multiple smaller precision numbers?
+** real data
+*** work out hierarchical rank/select data representation
+**** document?
+*** implement generation tool
+**** find/write alignment parser
+*** implement client-side
+** handle resize
+** location cursor on mousemove over genome
+** click to rotate to align on a specific location
+** genomic feature rendering
+** inertial scrolling
+** transparency?
+*** depth peeling
+*** and/or weighted average approx. OIT
+**** requires float textures/render targets
 overflows otherwise
-* location cursor on mousemove over genome
-* click to rotate to align on a specific location
-* genomic feature rendering
-* inertial scrolling
+* notes
+** zooming
+*** range: 0.8 to 200000
+**** for human:
+from 1/2 genome per screen (1.5gb per screen-width) to
+7500 bases (1.5gb/200000) per screen-width
+***** if screen is 1000 pixels, that's 7.5 bases per pixel
