@@ -55,6 +55,7 @@ var twistVertShader =
         // To calculate the normal, we take the cross product of the
         // line we're on and a vector across the twist to the point at
         // the same "distance" along the other edge of the twist.
+        // see dev-notes/twist-shader.png
 
         "  mat4 startTrans = orgTransforms[int(prevOrg)];",
         "  mat4 endTrans = orgTransforms[int(nextOrg)];",
@@ -66,7 +67,7 @@ var twistVertShader =
         "  vec4 otherEnd = endTrans * vec4(otherEnd, 1.0);",
         "  vec4 otherPos = otherStart + (distance * (otherEnd - otherStart));",
 
-        "  vec4 thisVec = thisEnd - thisStart;",
+        "  vec4 thisVec = thisEnd - thisPos;",
         "  vec4 otherVec = otherPos - thisPos;",
         "  vNormalEye = normMult * cross(thisVec.xyz, otherVec.xyz);",
 
@@ -154,10 +155,9 @@ function Spinteny(container, orgChroms, LCBs) {
     this.minZoom = 0.8;
     this.maxZoom = 200000;
 
-    // there's some trig behind radiusFactor;
     // a genomeRadius of (this.cameraDistance * radiusFactor)
     // completely fills the container horizontally.
-    // I wish I could draw you the diagram here.
+    // see dev-notes/genome-radius.jpg
     var radiusFactor = ( 1 / ( (1 / Math.sin(this.fovX / 2)) - 1 ) );
     this.genomeRadius = (this.cameraDistance * radiusFactor) / this.zoomMultiplier;
 
@@ -620,8 +620,9 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
     };
 
     var rowsPerTwist = 11;
-    // two vertices per row, plus 4 vertices for degenerate triangles
-    var vertsPerTwist = (rowsPerTwist * 2) + 4
+    // two vertices per row, plus 3 vertices for degenerate triangles and
+    // two to align the ends with the anchors
+    var vertsPerTwist = (rowsPerTwist * 2) + 6;
     var twistVertTotal = vertsPerTwist * numTwists;
     var twists = {
         start:      new Float32Array(3 * twistVertTotal),
@@ -680,7 +681,7 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
             org = block[match][orgId];
 
             // Using GL.TRIANGLE_STRIP is a win, in that it lowers the
-            // number of vertices that have to be sent to the
+            // number of vertices that have to be processed by the
             // hardware, and tells the hardware more about shared
             // edges between triangles.  The downside is that if we
             // want to draw a bunch of disconnected strips with one
@@ -696,29 +697,41 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
                               oldAnchorVerts[3], anchorVerts[1],
                               prevOrg, org, twistVert++,
                               0,  1);
+            // these two are to make the top edge align with oldAnchor
+            this.addTwistVert(twists,
+                              oldAnchorVerts[2], anchorVerts[0],
+                              oldAnchorVerts[3], anchorVerts[1],
+                              prevOrg, org, twistVert++, 
+                              0, 1);
+            this.addTwistVert(twists,
+                              oldAnchorVerts[3], anchorVerts[1],
+                              oldAnchorVerts[2], anchorVerts[0],
+                              prevOrg, org, twistVert++,
+                              0, -1);
+            // see dev-notes/twist-distance.png
+            var triHalfHeight = 1 / (2 * rowsPerTwist);
             for (var row = 0; row < rowsPerTwist; row++) {
                 this.addTwistVert(twists,
                                   oldAnchorVerts[2], anchorVerts[0],
                                   oldAnchorVerts[3], anchorVerts[1],
                                   prevOrg, org, twistVert++, 
-                                  row / (rowsPerTwist - 1),
+                                  ((row * 2) + 1) * triHalfHeight,
                                   1);
                 this.addTwistVert(twists,
                                   oldAnchorVerts[3], anchorVerts[1],
                                   oldAnchorVerts[2], anchorVerts[0],
                                   prevOrg, org, twistVert++,
-                                  row / (rowsPerTwist - 1),
+                                  ((row * 2) + 2) * triHalfHeight,
                                   -1);
             }
-            // verts for degenerate triangles: the last vertex of the
-            // twist, repeated three times
-            // (it used to be repeated only twice, but that flipped the winding
-            // direction for each twist)
+            // this additional vertex is to make the bottom edge align with
+            // the next anchor
             this.addTwistVert(twists,
-                              oldAnchorVerts[3], anchorVerts[1],
                               oldAnchorVerts[2], anchorVerts[0],
-                              prevOrg, org, twistVert++,
+                              oldAnchorVerts[3], anchorVerts[1],
+                              prevOrg, org, twistVert++, 
                               1, -1);
+            // for degenerate triangles, repeat the last vertex of the twist
             this.addTwistVert(twists,
                               oldAnchorVerts[3], anchorVerts[1],
                               oldAnchorVerts[2], anchorVerts[0],
