@@ -441,20 +441,17 @@ Spinteny.prototype.dragMove = function(event) {
  * takes a single genome match in the form of an array:
  * [orgID, chrID, start, end]
  * and returns a quadrilateral that covers that region of the
- * spinteny cylinder in the form of an array of four vec3's:
- * [topStart, topEnd, botStart, botEnd]
+ * spinteny cylinder in the given quad
  *
  * the current convention is that each org's drawing area has
  * top at 0 and bottom at 1, which will get transformed by that org's
  * transformation matrix in the vertex shader
  */
-Spinteny.prototype.matchToQuad = function(match) {
-    return [
-        this.mappers[match[0]].toSpatial(match[1], match[2], 0),
-        this.mappers[match[0]].toSpatial(match[1], match[3], 0),
-        this.mappers[match[0]].toSpatial(match[1], match[2], 1),
-        this.mappers[match[0]].toSpatial(match[1], match[3], 1)
-    ];
+Spinteny.prototype.matchToQuad = function(match, quad) {
+    this.mappers[match[0]].toSpatial(match[1], match[2], 0, quad.topLeft);
+    this.mappers[match[0]].toSpatial(match[1], match[3], 0, quad.topRight);
+    this.mappers[match[0]].toSpatial(match[1], match[2], 1, quad.botLeft);
+    this.mappers[match[0]].toSpatial(match[1], match[3], 1, quad.botRight);
 }
 
 /**
@@ -493,19 +490,19 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
     var rowsPerTwist = 11;
     // two vertices per row, plus four to align the ends with the anchors
     var vertsPerTwist = (rowsPerTwist * 2) + 4;
-    var twistVertTotal =
+    var alignVertTotal =
         ( (vertsPerTwist * numTwists) // verts for twists
           + (numAnchors * 4)          // verts for anchors
           + (2 * blocks.length) );    // verts for degen triangles
     var alignVerts = {
-        start:      new Float32Array(3 * twistVertTotal),
-        end:        new Float32Array(3 * twistVertTotal),
-        otherStart: new Float32Array(3 * twistVertTotal),
-        otherEnd:   new Float32Array(3 * twistVertTotal),
-        prevOrg:    new Float32Array(twistVertTotal),
-        nextOrg:    new Float32Array(twistVertTotal),
-        distance:   new Float32Array(twistVertTotal),
-        normMult:   new Float32Array(twistVertTotal)
+        start:      new Float32Array(3 * alignVertTotal),
+        end:        new Float32Array(3 * alignVertTotal),
+        otherStart: new Float32Array(3 * alignVertTotal),
+        otherEnd:   new Float32Array(3 * alignVertTotal),
+        prevOrg:    new Float32Array(alignVertTotal),
+        nextOrg:    new Float32Array(alignVertTotal),
+        distance:   new Float32Array(alignVertTotal),
+        normMult:   new Float32Array(alignVertTotal)
     };
 
     var curAnchor = 0;
@@ -513,7 +510,41 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
     // modified by a callee
     var vertIndex = new Int32Array([0]);
     var orgId = 0, chrId = 1, start = 2, end = 3;
-    var topLeft = 0, topRight = 1, botLeft = 2, botRight = 3;
+
+    var anchorBuf = new Float32Array(12);
+    var oldAnchorBuf = new Float32Array(12);
+    var anchorVerts = {
+        topLeft: anchorBuf.subarray(0, 3),
+        topRight: anchorBuf.subarray(3, 6),
+        botLeft: anchorBuf.subarray(6, 9),
+        botRight: anchorBuf.subarray(9, 12)
+    };
+    var oldAnchorVerts = {
+        topLeft: oldAnchorBuf.subarray(0, 3),
+        topRight: oldAnchorBuf.subarray(3, 6),
+        botLeft: oldAnchorBuf.subarray(6, 9),
+        botRight: oldAnchorBuf.subarray(9, 12)
+    };
+
+    // the top two vertices for twistCorners are the bottom two
+    // from the previous anchor, and the bottom two vertices for
+    // twistCorners are the top two vertices from the next anchor
+    //
+    //       TL           TR
+    //       |  oldAnchor |
+    //       BL___________BR
+    //       /            /
+    //      /    twist   /
+    //     /___________ /
+    //    TL           TR
+    //    |   anchor   |
+    //    BL           BR
+    twistCorners = {
+        topLeft: oldAnchorVerts.botLeft,
+        topRight: oldAnchorVerts.botRight,
+        botLeft: anchorVerts.topLeft,
+        botRight: anchorVerts.topRight
+    };
 
     for (var blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
         var block = blocks[blockIdx];
@@ -522,7 +553,7 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
         // take the genome-space match and convert it into
         // four 3d-space vertex positions for the quadrilateral
         // that will visually represent the match
-        var anchorVerts = this.matchToQuad(block[match]);
+        this.matchToQuad(block[match], anchorVerts);
 
         // set anchors.org to this organism ID for all 6 vertices
         // in the quad
@@ -541,8 +572,8 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
         // this first vert repeats for the degenerate triangle separating
         // this block from the previous one.
         this.addAlignVert(alignVerts,
-                          anchorVerts[topLeft], anchorVerts[botLeft],
-                          anchorVerts[topRight], anchorVerts[botRight],
+                          anchorVerts.topLeft, anchorVerts.botLeft,
+                          anchorVerts.topRight, anchorVerts.botRight,
                           org, org, vertIndex, 0, 1);
 
         // four verts for the anchor
@@ -552,24 +583,8 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
                               vertIndex, 1, 1);
         
         for (match = 1; match < block.length; match++) {
-            var oldAnchorVerts = anchorVerts;
-            anchorVerts = this.matchToQuad(block[match]);
-
-            // the top two vertices for twistCorners are the bottom two
-            // from the previous anchor, and the bottom two vertices for
-            // twistCorners are the top two vertices from the next anchor
-            //
-            //       0            1
-            //       |  oldAnchor |
-            //       2____________3
-            //       /            /
-            //      /    twist   /
-            //     /___________ /
-            //    0            1
-            //    |   anchor   |
-            //    2            3
-            twistCorners = [oldAnchorVerts[2], oldAnchorVerts[3],
-                            anchorVerts[0], anchorVerts[1]];
+            oldAnchorBuf.set(anchorBuf);
+            this.matchToQuad(block[match], anchorVerts);
 
             var prevOrg = org;
             org = block[match][orgId];
@@ -598,8 +613,8 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
         }
         // for degenerate triangles, repeat the last vertex of the block
         this.addAlignVert(alignVerts,
-                          anchorVerts[topRight], anchorVerts[botRight],
-                          anchorVerts[topLeft], anchorVerts[botLeft],
+                          anchorVerts.topRight, anchorVerts.botRight,
+                          anchorVerts.topLeft, anchorVerts.botLeft,
                           org, org, vertIndex, 1, -1);
     }
     //console.log([vertIndex, alignVerts.normMult.length]);
@@ -610,20 +625,20 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
 Spinteny.prototype.addAlignVertPair = function(alignVerts, corners, prevOrg, 
                                                nextOrg, vertIndex, 
                                                distance1, distance2) {
-    var topLeft = 0, topRight = 1, botLeft = 2, botRight = 3;
     this.addAlignVert(alignVerts,
-                      corners[topLeft], corners[botLeft],
-                      corners[topRight], corners[botRight],
+                      corners.topLeft, corners.botLeft,
+                      corners.topRight, corners.botRight,
                       prevOrg, nextOrg, vertIndex,
                       distance1, 1);
     this.addAlignVert(alignVerts,
-                      corners[topRight], corners[botRight],
-                      corners[topLeft], corners[botLeft],
+                      corners.topRight, corners.botRight,
+                      corners.topLeft, corners.botLeft,
                       prevOrg, nextOrg, vertIndex,
                       distance2, -1);
 };
 
-Spinteny.prototype.addAlignVert = function(alignVerts, start, end,
+Spinteny.prototype.addAlignVert = function(alignVerts,
+                                           start, end,
                                            otherStart, otherEnd,
                                            prevOrg, nextOrg,
                                            vertIndex, distance, normMult) {
@@ -663,6 +678,8 @@ function CylMapper(chroms, axis, origin, padding) {
     //this.partialSums[0] = 0
     this.partialSums = [];
     this.byName = {};
+    this.tmpMat4 = goog.vec.Mat4.createFloat32();
+    this.tmpVec3 = goog.vec.Vec3.createFloat32();
 
     var partialSum = 0;
     for (var i = 0; i < chroms.length; i++) {
@@ -681,7 +698,7 @@ function CylMapper(chroms, axis, origin, padding) {
  * @param distance (optional) distance along the cylinder's axis
  * @return vec3 with x,y,z of result
  */
-CylMapper.prototype.toSpatial = function(index, base, distance) {
+CylMapper.prototype.toSpatial = function(index, base, distance, result) {
     distance = (distance === undefined) ? 0 : distance;
     //var index = this.byName["" + chrom];
     var angle = 
@@ -693,19 +710,12 @@ CylMapper.prototype.toSpatial = function(index, base, distance) {
     angle *= ( (2 * Math.PI)
                / ( (2 * Math.PI) 
                    + ( this.padding * ( this.chroms.length ) ) ) );
-    var rotM = goog.vec.Mat4.makeRotate(goog.vec.Mat4.createFloat32(),
-                                        angle,
-                                        this.rotAxis[0],
-                                        this.rotAxis[1],
-                                        this.rotAxis[2]);
-    var result = goog.vec.Vec3.createFloat32();
-    goog.vec.Mat4.multVec3NoTranslate(rotM, this.origin, result);
+    goog.vec.Mat4.makeRotate(this.tmpMat4, angle,
+                             this.rotAxis[0], this.rotAxis[1], this.rotAxis[2]);
+    goog.vec.Mat4.multVec3NoTranslate(this.tmpMat4, this.origin, result);
 
-    if (0 != distance) {
-        var distVec = goog.vec.Vec3.createFloat32();
-        goog.vec.Vec3.scale(this.axis, distance, distVec);
-        goog.vec.Vec3.add(result, distVec, result);
-    }
+    goog.vec.Vec3.scale(this.axis, distance, this.tmpVec3);
+    goog.vec.Vec3.add(result, this.tmpVec3, result);
 
     return result;
 };
