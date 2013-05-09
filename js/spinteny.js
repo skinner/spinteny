@@ -13,27 +13,7 @@ goog.require("goog.ui.Slider");
 goog.require("goog.vec.Mat4");
 goog.require("goog.vec.Vec3");
 
-var anchorVertShader = 
-    [
-        "uniform  mat4  orgTransforms[8];",
-        "uniform  mat4  viewMatrix;",
-        "uniform  mat4  projMatrix;",
-
-        "attribute  vec3   vertex;",
-        "attribute  vec3   normal;",
-        "attribute  float  org;",
-
-        "varying  vec3   vNormalEye;",
-
-        "void main(void) {",
-        "  mat4 mvMatrix = viewMatrix * orgTransforms[int(org)];",
-        //"  vNormalEye = transpose(inverse(mat3(mvMatrix))) * normal;",
-        "  vNormalEye = mat3(mvMatrix) * normal;",
-        "  gl_Position = projMatrix * mvMatrix * vec4( vertex, 1.0 );",
-        "}"
-    ].join( "\n" );
-
-var twistVertShader = 
+var alignVertShader = 
     [
         "uniform    mat4    orgTransforms[8];",
         "uniform    mat4    viewMatrix;",
@@ -219,10 +199,10 @@ function Spinteny(container, orgChroms, LCBs) {
             }
         );
 
-    var synVerts = this.LCBsToVertices(LCBs);
+    var alignVerts = this.LCBsToVertices(LCBs);
 
-    var anchorShaderInfo = {
-        vertexShader: anchorVertShader,
+    var alignShaderInfo = {
+        vertexShader: alignVertShader,
         fragmentShader: alignFragShader,
 
         data: {
@@ -241,47 +221,19 @@ function Spinteny(container, orgChroms, LCBs) {
 
             // attributes
 
-            vertex: synVerts.anchors.vertex,
-            normal: synVerts.anchors.normal,
-            org: synVerts.anchors.org,
-        },
-        primitives: GL.TRIANGLES
-    };
-
-    var twistShaderInfo = {
-        vertexShader: twistVertShader,
-        fragmentShader: alignFragShader,
-
-        data: {
-            // uniforms
-
-            orgTransforms: { value: this.orgTransformFlat },
-            viewMatrix: { value: this.viewMatrix },
-            projMatrix: { value: this.projMatrix },
-            fogRange: { value: this.fogRange },
-
-            ambColor: { value: this.ambColor },
-            ambWeight: { value: this.ambWeight },
-            dirColor: { value: this.dirColor },
-            dirWeight: { value: this.dirWeight },
-            dirVector: { value: this.dirVector },
-
-            // attributes
-
-            start: synVerts.twists.start,
-            end: synVerts.twists.end,
-            otherStart: synVerts.twists.otherStart,
-            otherEnd: synVerts.twists.otherEnd,
-            prevOrg: synVerts.twists.prevOrg,
-            nextOrg: synVerts.twists.nextOrg,
-            distance: synVerts.twists.distance,
-            normMult: synVerts.twists.normMult,
+            start: alignVerts.start,
+            end: alignVerts.end,
+            otherStart: alignVerts.otherStart,
+            otherEnd: alignVerts.otherEnd,
+            prevOrg: alignVerts.prevOrg,
+            nextOrg: alignVerts.nextOrg,
+            distance: alignVerts.distance,
+            normMult: alignVerts.normMult,
         },
         primitives: GL.TRIANGLE_STRIP
     };
 
-    this.anchors = new GLOW.Shader(anchorShaderInfo);
-    this.twists = new GLOW.Shader(twistShaderInfo);
+    this.aligns = new GLOW.Shader(alignShaderInfo);
 
     GL.disable(GL.CULL_FACE);
 
@@ -363,8 +315,7 @@ Spinteny.prototype.updateTransform = function(i) {
 Spinteny.prototype.draw = function() {
     this.context.cache.clear();
     this.context.clear();
-    this.anchors.draw();
-    this.twists.draw();
+    this.aligns.draw();
 };
 
 Spinteny.prototype.updateViewProj = function() {
@@ -486,68 +437,6 @@ Spinteny.prototype.dragMove = function(event) {
     event.preventDefault();
 };
 
-function triangleBarycenters(length) {
-    var centers = new Float32Array([1, 0, 0,
-                                    0, 1, 0,
-                                    0, 0, 1]);
-    var allCenters = new Float32Array(length);
-    for (var i = 0; i < length; i += 9) {
-        allCenters.set(centers, i);
-    }
-    return allCenters;
-}
-
-/**
- * add data for two triangles (6 vertices) to dst starting at offset
- * vertices: array of 4 vec3's, in the order
- *           [top left, top right, bottom left, bottom right]
- * dst: flat array of vertex positions (e.g., to pass to gl.drawArrays
- *      with GL.TRIANGLES)
- */
-function trianglesForQuad(vertices, dst, offset) {
-    // triangles wind counterclockwise (if you're looking at them from
-    // outside the mesh), which is what calcArrayFaceNormals expects
-    dst.set(vertices[0], offset + 0 ); // tri 1: top left
-    dst.set(vertices[2], offset + 3 ); // tri 1: bottom left
-    dst.set(vertices[1], offset + 6 ); // tri 1: top right
-    dst.set(vertices[1], offset + 9 ); // tri 2: top right
-    dst.set(vertices[2], offset + 12); // tri 2: bottom left
-    dst.set(vertices[3], offset + 15); // tri 2: bottom right
-}
-
-/**
- * calculate normals for the vertices in src
- * (assumes src and dst are arrays that could be passed to
- *  gl.drawArrays with GL_TRIANGLES)
- * (also assumes that normals should be perpendicular to the triangle face)
- */
-function calcArrayFaceNormals(src, dst) {
-    goog.asserts.assert(src.length == dst.length);
-
-    var v12 = goog.vec.Vec3.create();
-    var v13 = goog.vec.Vec3.create();
-    var result = goog.vec.Vec3.create();
-    for (var i = 0; i < src.length; i += 9) {
-        // doing some math myself here rather than using a lib
-        // function in order to avoid allocating
-        v12[0] = src[i + 3] - src[i + 0];
-        v12[1] = src[i + 4] - src[i + 1];
-        v12[2] = src[i + 5] - src[i + 2];
-        v13[0] = src[i + 6] - src[i + 0];
-        v13[1] = src[i + 7] - src[i + 1];
-        v13[2] = src[i + 8] - src[i + 2];
-        goog.vec.Vec3.cross(v12, v13, result);
-        goog.vec.Vec3.normalize(result, result);
-        dst.set(result, i + 0);
-        dst.set(result, i + 3);
-        dst.set(result, i + 6);
-    }
-}
-
-function repeat(val, dst, offset, count) {
-    for (var i = 0; i < count; i++) dst[offset + i] = val;
-}
-
 /**
  * takes a single genome match in the form of an array:
  * [orgID, chrID, start, end]
@@ -574,35 +463,24 @@ Spinteny.prototype.matchToQuad = function(match) {
  *
  * and returns an object with
  * { 
- *     anchors:
- *         {
- *             vertex: vertex x, y, z coord (model space)
- *             normal: vertex normal x, y, z
- *             org: organism ID [ 0..(# of genomes) )
- *         }
- *     twists:
- *         {
- *             start: position of the start of the line this vertex is on
- *                    (model space)
- *             end: position of the end of the line this vertex is on
- *                  (model space)
- *             otherStart: position of the start of the other edge of the twist
- *                        (model space)
- *             otherEnd: position of the end of the other edge of the twist
- *                      (model space)
- *             prevOrg: organism ID of the previous genome
- *             nextOrg: organism ID of the next genome
- *             distance: how far along the line from start to end to
- *                       place this vertex
- *         }
+ *     start: position of the start of the line this vertex is on
+ *            (model space)
+ *     end: position of the end of the line this vertex is on
+ *          (model space)
+ *     otherStart: position of the start of the other edge of the twist
+ *                 (model space)
+ *     otherEnd: position of the end of the other edge of the twist
+ *               (model space)
+ *     prevOrg: organism ID of the previous genome
+ *     nextOrg: organism ID of the next genome
+ *     distance: how far along the line from start to end to place this vertex
  * }
  *
- * "anchors" visually represent the span of an LCB on a particular genome.
- * "twists" visually represent the connections between related anchors.
- * "twists" has extra vertex attributes because we need to calculate
- * vertex positions and normals within the vertex shader for the twists.
+ * see dev-notes/twist-shader.png
  */
 Spinteny.prototype.LCBsToVertices = function(blocks) {
+    // "anchors" visually represent the span of an LCB on a particular genome.
+    // "twists" visually represent the connections between related anchors.
     var numAnchors = 0;
     var numTwists = 0;
     for (var i = 0; i < blocks.length; i++) {
@@ -611,25 +489,15 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
         // and there's a twist between related anchors
         numTwists += blocks[i].length - 1;
     }
-    // anchors are planar quadrilaterals
-    // using drawArrays means 6 vertices per face
-    var anchVertCount = 6 * numAnchors;
-    var anchors = {
-        // multiplying by 3 here because each vertex/normal has
-        // (x, y, z) components
-        vertex: new Float32Array(3 * anchVertCount),
-        normal: new Float32Array(3 * anchVertCount),
-        // ideally, org would be an unsigned int (or short or byte) array,
-        // but GLSL (in webGL 1.0) doesn't allow those types for attributes
-        org:    new Float32Array(anchVertCount)
-    };
 
     var rowsPerTwist = 11;
-    // two vertices per row, plus 3 vertices for degenerate triangles and
-    // two to align the ends with the anchors
-    var vertsPerTwist = (rowsPerTwist * 2) + 6;
-    var twistVertTotal = vertsPerTwist * numTwists;
-    var twists = {
+    // two vertices per row, plus four to align the ends with the anchors
+    var vertsPerTwist = (rowsPerTwist * 2) + 4;
+    var twistVertTotal =
+        ( (vertsPerTwist * numTwists) // verts for twists
+          + (numAnchors * 4)          // verts for anchors
+          + (2 * blocks.length) );    // verts for degen triangles
+    var alignVerts = {
         start:      new Float32Array(3 * twistVertTotal),
         end:        new Float32Array(3 * twistVertTotal),
         otherStart: new Float32Array(3 * twistVertTotal),
@@ -641,8 +509,11 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
     };
 
     var curAnchor = 0;
-    var twistVert = 0;
+    // vertIndex has an extra level of indirection because the value is
+    // modified by a callee
+    var vertIndex = new Int32Array([0]);
     var orgId = 0, chrId = 1, start = 2, end = 3;
+    var topLeft = 0, topRight = 1, botLeft = 2, botRight = 3;
 
     for (var blockIdx = 0; blockIdx < blocks.length; blockIdx++) {
         var block = blocks[blockIdx];
@@ -653,14 +524,32 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
         // that will visually represent the match
         var anchorVerts = this.matchToQuad(block[match]);
 
-        // add two triangles for this quad to anchors.vertex
-        // (18 is for 3 values (x, y, z) for 6 vertices)
-        trianglesForQuad(anchorVerts, anchors.vertex, curAnchor * 18);
         // set anchors.org to this organism ID for all 6 vertices
         // in the quad
         var org = block[match][orgId];
-        repeat(org, anchors.org, curAnchor * 6, 6);
-        curAnchor++;
+
+        // Using GL.TRIANGLE_STRIP is a win, in that it lowers the
+        // number of vertices that have to be processed by the
+        // hardware, and tells the hardware more about shared
+        // edges between triangles.  The downside is that if we
+        // want to draw a bunch of disconnected strips with one
+        // draw call, we need to insert extra vertices at the
+        // beginning and end of each strip, which make degenerate
+        // (zero-area) triangles that don't show up.  Otherwise
+        // all the strips would be connected into one long strip.
+
+        // this first vert repeats for the degenerate triangle separating
+        // this block from the previous one.
+        this.addAlignVert(alignVerts,
+                          anchorVerts[topLeft], anchorVerts[botLeft],
+                          anchorVerts[topRight], anchorVerts[botRight],
+                          org, org, vertIndex, 0, 1);
+
+        // four verts for the anchor
+        this.addAlignVertPair(alignVerts, anchorVerts, org, org,
+                              vertIndex, 0, 0);
+        this.addAlignVertPair(alignVerts, anchorVerts, org, org,
+                              vertIndex, 1, 1);
         
         for (match = 1; match < block.length; match++) {
             var oldAnchorVerts = anchorVerts;
@@ -685,92 +574,69 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
             var prevOrg = org;
             org = block[match][orgId];
 
-            // Using GL.TRIANGLE_STRIP is a win, in that it lowers the
-            // number of vertices that have to be processed by the
-            // hardware, and tells the hardware more about shared
-            // edges between triangles.  The downside is that if we
-            // want to draw a bunch of disconnected strips with one
-            // draw call, we need to insert extra vertices at the
-            // beginning and end of each twist, which make degenerate
-            // (zero-area) triangles that don't show up.  Otherwise
-            // all the twists would be connected into one long strip.
-            //
-            // the first extra vertex is just a repeat of the first
-            // vertex of the twist.
-            this.addTwistVert(twists,
-                              oldAnchorVerts[2], anchorVerts[0],
-                              oldAnchorVerts[3], anchorVerts[1],
-                              prevOrg, org, twistVert++,
-                              0,  1);
-            // these two are to make the top edge align with oldAnchor
-            this.addTwistVert(twists,
-                              oldAnchorVerts[2], anchorVerts[0],
-                              oldAnchorVerts[3], anchorVerts[1],
-                              prevOrg, org, twistVert++, 
-                              0, 1);
-            this.addTwistVert(twists,
-                              oldAnchorVerts[3], anchorVerts[1],
-                              oldAnchorVerts[2], anchorVerts[0],
-                              prevOrg, org, twistVert++,
-                              0, -1);
             // see dev-notes/twist-distance.png
+
+            // two verts to align the top edge of the twist with oldAnchor
+            this.addAlignVertPair(alignVerts, twistCorners, prevOrg, org,
+                                  vertIndex, 0, 0);
             var triHalfHeight = 1 / (2 * rowsPerTwist);
             for (var row = 0; row < rowsPerTwist; row++) {
-                this.addTwistVert(twists,
-                                  oldAnchorVerts[2], anchorVerts[0],
-                                  oldAnchorVerts[3], anchorVerts[1],
-                                  prevOrg, org, twistVert++, 
-                                  ((row * 2) + 1) * triHalfHeight,
-                                  1);
-                this.addTwistVert(twists,
-                                  oldAnchorVerts[3], anchorVerts[1],
-                                  oldAnchorVerts[2], anchorVerts[0],
-                                  prevOrg, org, twistVert++,
-                                  ((row * 2) + 2) * triHalfHeight,
-                                  -1);
+                this.addAlignVertPair(alignVerts, twistCorners, prevOrg, org,
+                                      vertIndex,
+                                      ((row * 2) + 1) * triHalfHeight,
+                                      ((row * 2) + 2) * triHalfHeight);
             }
-            // this additional vertex is to make the bottom edge align with
-            // the next anchor
-            this.addTwistVert(twists,
-                              oldAnchorVerts[2], anchorVerts[0],
-                              oldAnchorVerts[3], anchorVerts[1],
-                              prevOrg, org, twistVert++, 
-                              1, -1);
-            // for degenerate triangles, repeat the last vertex of the twist
-            this.addTwistVert(twists,
-                              oldAnchorVerts[3], anchorVerts[1],
-                              oldAnchorVerts[2], anchorVerts[0],
-                              prevOrg, org, twistVert++,
-                              1, -1);
-            this.addTwistVert(twists,
-                              oldAnchorVerts[3], anchorVerts[1],
-                              oldAnchorVerts[2], anchorVerts[0],
-                              prevOrg, org, twistVert++,
-                              1, -1);
+            // two verts to align the bottom edge of the twist with the anchor
+            this.addAlignVertPair(alignVerts, twistCorners, prevOrg, org,
+                                  vertIndex, 1, 1);
+            // four verts for the anchor
+            this.addAlignVertPair(alignVerts, anchorVerts, org, org,
+                                  vertIndex, 0, 0);
+            this.addAlignVertPair(alignVerts, anchorVerts, org, org,
+                                  vertIndex, 1, 1);
 
-            trianglesForQuad(anchorVerts, anchors.vertex, curAnchor * 18);
-            repeat(org, anchors.org, curAnchor * 6, 6);
-            curAnchor++;
         }
+        // for degenerate triangles, repeat the last vertex of the block
+        this.addAlignVert(alignVerts,
+                          anchorVerts[topRight], anchorVerts[botRight],
+                          anchorVerts[topLeft], anchorVerts[botLeft],
+                          org, org, vertIndex, 1, -1);
     }
+    //console.log([vertIndex, alignVerts.normMult.length]);
 
-    calcArrayFaceNormals(anchors.vertex, anchors.normal);
-
-    return { anchors: anchors, twists: twists };
+    return alignVerts;
 };
 
-Spinteny.prototype.addTwistVert = function(twists, start, end,
+Spinteny.prototype.addAlignVertPair = function(alignVerts, corners, prevOrg, 
+                                               nextOrg, vertIndex, 
+                                               distance1, distance2) {
+    var topLeft = 0, topRight = 1, botLeft = 2, botRight = 3;
+    this.addAlignVert(alignVerts,
+                      corners[topLeft], corners[botLeft],
+                      corners[topRight], corners[botRight],
+                      prevOrg, nextOrg, vertIndex,
+                      distance1, 1);
+    this.addAlignVert(alignVerts,
+                      corners[topRight], corners[botRight],
+                      corners[topLeft], corners[botLeft],
+                      prevOrg, nextOrg, vertIndex,
+                      distance2, -1);
+};
+
+Spinteny.prototype.addAlignVert = function(alignVerts, start, end,
                                            otherStart, otherEnd,
                                            prevOrg, nextOrg,
                                            vertIndex, distance, normMult) {
-    twists.start.set(start, vertIndex * 3);
-    twists.end.set(end, vertIndex * 3);
-    twists.otherStart.set(otherStart, vertIndex * 3);
-    twists.otherEnd.set(otherEnd, vertIndex * 3);
-    twists.prevOrg[vertIndex] = prevOrg;
-    twists.nextOrg[vertIndex] = nextOrg;
-    twists.distance[vertIndex] = distance;
-    twists.normMult[vertIndex] = normMult;
+    var vert = vertIndex[0];
+    vertIndex[0] += 1;
+    alignVerts.start.set(start, vert * 3);
+    alignVerts.end.set(end, vert * 3);
+    alignVerts.otherStart.set(otherStart, vert * 3);
+    alignVerts.otherEnd.set(otherEnd, vert * 3);
+    alignVerts.prevOrg[vert] = prevOrg;
+    alignVerts.nextOrg[vert] = nextOrg;
+    alignVerts.distance[vert] = distance;
+    alignVerts.normMult[vert] = normMult;
 };
 
 /**
