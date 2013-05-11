@@ -52,7 +52,7 @@ var alignVertShader =
         "  vec4 otherEnd = endTrans * vec4(otherEnd, 1.0);",
         "  vec4 otherPos = otherStart + (distance * (otherEnd - otherStart));",
 
-        "  vec4 thisVec = thisEnd - thisPos;",
+        "  vec4 thisVec = thisEnd - thisStart;",
         "  vec4 otherVec = otherPos - thisPos;",
         "  vNormalEye = normMult * cross(thisVec.xyz, otherVec.xyz);",
 
