@@ -19,44 +19,44 @@ var alignVertShader =
         "uniform    mat4    viewMatrix;",
         "uniform    mat4    projMatrix;",
 
-        "attribute  vec3    start;",
-        "attribute  vec3    end;",
+        "attribute  vec3    thisStart;",
+        "attribute  vec3    thisEnd;",
         "attribute  vec3    otherStart;",
         "attribute  vec3    otherEnd;",
         "attribute  float   prevOrg;",
         "attribute  float   nextOrg;",
-        "attribute  float   distance;",
+        "attribute  float   dist;",
         "attribute  float   normMult;",
-        "varying vec3 vNormalEye;",
+        "varying vec3 vNormalWorld;",
 
         "void main(void) {",
         // twist vertices are all along the left and right sides of
         // each twist.  thisStart and thisEnd are the start and end
         // points of the line this vertex is on.  otherStart and
         // otherEnd are the start and end points of the opposide side
-        // of the twist.  distance ([0, 1]) is how far along those
+        // of the twist.  dist ([0, 1]) is how far along those
         // lines this vertex goes.
         //
         // To calculate the normal, we take the cross product of the
         // line we're on and a vector across the twist to the point at
-        // the same "distance" along the other edge of the twist.
+        // the same dist along the other edge of the twist.
         // see dev-notes/twist-shader.png
 
         "  mat4 startTrans = orgTransforms[int(prevOrg)];",
         "  mat4 endTrans = orgTransforms[int(nextOrg)];",
-        "  vec4 thisStart = startTrans * vec4(start, 1.0);",
-        "  vec4 thisEnd = endTrans * vec4(end, 1.0);",
-        "  vec4 thisPos = thisStart + (distance * (thisEnd - thisStart));",
+        "  vec4 thisStartWorld = startTrans * vec4(thisStart, 1.0);",
+        "  vec4 thisEndWorld = endTrans * vec4(thisEnd, 1.0);",
+        "  vec4 thisPosWorld = thisStartWorld + (dist * (thisEndWorld - thisStartWorld));",
 
-        "  vec4 otherStart = startTrans * vec4(otherStart, 1.0);",
-        "  vec4 otherEnd = endTrans * vec4(otherEnd, 1.0);",
-        "  vec4 otherPos = otherStart + (distance * (otherEnd - otherStart));",
+        "  vec4 otherStartWorld = startTrans * vec4(otherStart, 1.0);",
+        "  vec4 otherEndWorld = endTrans * vec4(otherEnd, 1.0);",
+        "  vec4 otherPosWorld = otherStartWorld + (dist * (otherEndWorld - otherStartWorld));",
 
-        "  vec4 thisVec = thisEnd - thisStart;",
-        "  vec4 otherVec = otherPos - thisPos;",
-        "  vNormalEye = normMult * cross(thisVec.xyz, otherVec.xyz);",
+        "  vec4 thisVecWorld = thisEndWorld - thisStartWorld;",
+        "  vec4 otherVecWorld = otherPosWorld - thisPosWorld;",
+        "  vNormalWorld = normMult * cross(thisVecWorld.xyz, otherVecWorld.xyz);",
 
-        "  gl_Position = projMatrix * viewMatrix * vec4(thisPos.xyz, 1.0);",
+        "  gl_Position = projMatrix * viewMatrix * vec4(thisPosWorld.xyz, 1.0);",
         "}"
     ].join( "\n" );
 
@@ -74,22 +74,22 @@ var alignFragShader =
         "uniform  float  dirWeight;",
         "uniform  vec2   fogRange;",
 
-        "varying  vec3   vNormalEye;",
+        "varying  vec3   vNormalWorld;",
 
         "void main() {",
         "    float z = gl_FragCoord.z / gl_FragCoord.w;",
         "    float fogFactor = (fogRange.y - z) / (fogRange.y - fogRange.x);",
         "    fogFactor = clamp(fogFactor, 0.0, 1.0);",
 
-        "    vec3 normal = normalize(vNormalEye);",
+        "    vec3 normal = normalize(vNormalWorld);",
         // flip normal for rear-facing fragments, because we want our
         // materials to be double-sided
         "    normal = normal * ( -1.0 + 2.0 * float( gl_FrontFacing ) );",
 
         "    float dirDiffuse = max(dot(normal, dirVector), 0.0);",
-        "    vec3 dirColor = dirWeight * dirDiffuse * dirColor;",
-        "    vec3 ambColor = ambWeight * ambColor;",
-        "    vec3 color = dirColor + ambColor;",
+        "    vec3 dirLighted = dirWeight * dirDiffuse * dirColor;",
+        "    vec3 ambLighted = ambWeight * ambColor;",
+        "    vec3 color = dirLighted + ambLighted;",
         "    gl_FragColor = vec4(mix(vec3(1.0), color, fogFactor), 1.0);",
         "}"
     ].join( "\n" );
@@ -222,13 +222,13 @@ function Spinteny(container, orgChroms, LCBs) {
 
             // attributes
 
-            start: alignVerts.start,
-            end: alignVerts.end,
+            thisStart: alignVerts.thisStart,
+            thisEnd: alignVerts.thisEnd,
             otherStart: alignVerts.otherStart,
             otherEnd: alignVerts.otherEnd,
             prevOrg: alignVerts.prevOrg,
             nextOrg: alignVerts.nextOrg,
-            distance: alignVerts.distance,
+            dist: alignVerts.dist,
             normMult: alignVerts.normMult,
         },
         primitives: GL.TRIANGLE_STRIP
@@ -461,17 +461,17 @@ Spinteny.prototype.matchToQuad = function(match, quad) {
  *
  * and returns an object with
  * { 
- *     start: position of the start of the line this vertex is on
- *            (model space)
- *     end: position of the end of the line this vertex is on
- *          (model space)
+ *     thisStart: position of the start of the line this vertex is on
+ *                (model space)
+ *     thisEnd: position of the end of the line this vertex is on
+ *              (model space)
  *     otherStart: position of the start of the other edge of the twist
  *                 (model space)
  *     otherEnd: position of the end of the other edge of the twist
  *               (model space)
  *     prevOrg: organism ID of the previous genome
  *     nextOrg: organism ID of the next genome
- *     distance: how far along the line from start to end to place this vertex
+ *     dist: how far along the line from start to end to place this vertex
  * }
  *
  * see dev-notes/twist-shader.png
@@ -488,7 +488,7 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
         numTwists += blocks[i].length - 1;
     }
 
-    var rowsPerTwist = 11;
+    var rowsPerTwist = 12;
     // two vertices per row, plus four to align the ends with the anchors
     var vertsPerTwist = (rowsPerTwist * 2) + 4;
     var alignVertTotal =
@@ -496,13 +496,13 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
           + (numAnchors * 4)          // verts for anchors
           + (2 * blocks.length) );    // verts for degen triangles
     var alignVerts = {
-        start:      new Float32Array(3 * alignVertTotal),
-        end:        new Float32Array(3 * alignVertTotal),
+        thisStart:      new Float32Array(3 * alignVertTotal),
+        thisEnd:        new Float32Array(3 * alignVertTotal),
         otherStart: new Float32Array(3 * alignVertTotal),
         otherEnd:   new Float32Array(3 * alignVertTotal),
         prevOrg:    new Float32Array(alignVertTotal),
         nextOrg:    new Float32Array(alignVertTotal),
-        distance:   new Float32Array(alignVertTotal),
+        dist:   new Float32Array(alignVertTotal),
         normMult:   new Float32Array(alignVertTotal)
     };
 
@@ -643,13 +643,13 @@ Spinteny.prototype.addAlignVert = function(alignVerts,
                                            vertIndex, distance, normMult) {
     var vert = vertIndex[0];
     vertIndex[0] += 1;
-    alignVerts.start.set(start, vert * 3);
-    alignVerts.end.set(end, vert * 3);
+    alignVerts.thisStart.set(start, vert * 3);
+    alignVerts.thisEnd.set(end, vert * 3);
     alignVerts.otherStart.set(otherStart, vert * 3);
     alignVerts.otherEnd.set(otherEnd, vert * 3);
     alignVerts.prevOrg[vert] = prevOrg;
     alignVerts.nextOrg[vert] = nextOrg;
-    alignVerts.distance[vert] = distance;
+    alignVerts.dist[vert] = distance;
     alignVerts.normMult[vert] = normMult;
 };
 
