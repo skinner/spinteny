@@ -3,6 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
  */
 
+goog.provide('Spinteny');
+goog.exportSymbol('Spinteny', Spinteny);
+
 goog.require("goog.asserts");
 goog.require("goog.dom");
 goog.require("goog.debug.Logger");
@@ -94,7 +97,8 @@ var alignFragShader =
         "}"
     ].join( "\n" );
 
-function Spinteny(container, orgChroms, LCBs) {
+/** @constructor */
+Spinteny = function(container, orgChroms, LCBs) {
     this.container = goog.dom.getElement(container);
     this.containerSize = goog.style.getSize(this.container);
 
@@ -209,27 +213,27 @@ function Spinteny(container, orgChroms, LCBs) {
         data: {
             // uniforms
 
-            orgTransforms: { value: this.orgTransformFlat },
-            viewMatrix: { value: this.viewMatrix },
-            projMatrix: { value: this.projMatrix },
-            fogRange: { value: this.fogRange },
+            "orgTransforms": { value: this.orgTransformFlat },
+            "viewMatrix": { value: this.viewMatrix },
+            "projMatrix": { value: this.projMatrix },
+            "fogRange": { value: this.fogRange },
 
-            ambColor: { value: this.ambColor },
-            ambWeight: { value: this.ambWeight },
-            dirColor: { value: this.dirColor },
-            dirWeight: { value: this.dirWeight },
-            dirVector: { value: this.dirVector },
+            "ambColor": { value: this.ambColor },
+            "ambWeight": { value: this.ambWeight },
+            "dirColor": { value: this.dirColor },
+            "dirWeight": { value: this.dirWeight },
+            "dirVector": { value: this.dirVector },
 
             // attributes
 
-            thisStart: alignVerts.thisStart,
-            thisEnd: alignVerts.thisEnd,
-            otherStart: alignVerts.otherStart,
-            otherEnd: alignVerts.otherEnd,
-            prevOrg: alignVerts.prevOrg,
-            nextOrg: alignVerts.nextOrg,
-            dist: alignVerts.dist,
-            normMult: alignVerts.normMult,
+            "thisStart": alignVerts.thisStart,
+            "thisEnd": alignVerts.thisEnd,
+            "otherStart": alignVerts.otherStart,
+            "otherEnd": alignVerts.otherEnd,
+            "prevOrg": alignVerts.prevOrg,
+            "nextOrg": alignVerts.nextOrg,
+            "dist": alignVerts.dist,
+            "normMult": alignVerts.normMult
         },
         primitives: GL.TRIANGLE_STRIP
     };
@@ -540,7 +544,7 @@ Spinteny.prototype.LCBsToVertices = function(blocks) {
     //    TL           TR
     //    |   anchor   |
     //    BL           BR
-    twistCorners = {
+    var twistCorners = {
         topLeft: oldAnchorVerts.botLeft,
         topRight: oldAnchorVerts.botRight,
         botLeft: anchorVerts.topLeft,
@@ -659,6 +663,8 @@ Spinteny.prototype.addAlignVert = function(alignVerts,
  * @param axis {Vec3} axis vector at the center of the cylinder
  * @param origin {Vec3} vector from the axis to the zero point
  * @param padding spacing between chroms (radians) (optional)
+ *
+ * @constructor
  */
 function CylMapper(chroms, axis, origin, padding) {
     this.axis = axis;
@@ -682,10 +688,10 @@ function CylMapper(chroms, axis, origin, padding) {
 
     var partialSum = 0;
     for (var i = 0; i < chroms.length; i++) {
-        var name = ("name" in chroms[i]) ? chroms[i].name : i;
+        var name = ("name" in chroms[i]) ? chroms[i]["name"] : i;
         this.byName["" + name] = i;
         this.partialSums.push(partialSum);
-        partialSum += chroms[i].end - chroms[i].start;
+        partialSum += chroms[i]["end"] - chroms[i]["start"];
     }
     this.totalLength = partialSum;
 }
@@ -701,7 +707,7 @@ CylMapper.prototype.toSpatial = function(index, base, distance, result) {
     distance = (distance === undefined) ? 0 : distance;
     //var index = this.byName["" + chrom];
     var angle = 
-        ( ( ( this.partialSums[index] + ( base - this.chroms[index].start ) )
+        ( ( ( this.partialSums[index] + ( base - this.chroms[index]["start"] ) )
             / this.totalLength )
           * ( 2 * Math.PI ) )
         + (this.padding * index);
@@ -720,3 +726,4 @@ CylMapper.prototype.toSpatial = function(index, base, distance, result) {
 };
 
 //TODO: CylMapper.prototype.fromSpatial = function(spatialPos){}
+

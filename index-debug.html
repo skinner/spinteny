@@ -1,0 +1,87 @@
+<html>
+
+<head>
+  <title>Spinteny</title>
+
+  <meta http-equiv="X-UA-Compatible" content="chrome=1">
+
+  <meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+  <meta name="viewport" content="width=device-width, height=device-height, user-scalable=no, initial-scale=1, maximum-scale=1, minimum-scale=1" />
+
+  <script type="text/javascript" src="closure/closure/goog/base.js"></script>
+
+  <script type="text/javascript" src="third-party/GLOW/src/GLOW.js"></script>
+  <script type="text/javascript" src="third-party/GLOW/src/core/Context.js"></script>
+  <script type="text/javascript" src="third-party/GLOW/src/core/Shader.js"></script>
+  <script type="text/javascript" src="third-party/GLOW/src/core/Cache.js"></script>
+  <script type="text/javascript" src="third-party/GLOW/src/core/Compiler.js"></script>
+  <script type="text/javascript" src="third-party/GLOW/src/core/Uniform.js"></script>
+  <script type="text/javascript" src="third-party/GLOW/src/core/Attribute.js"></script>
+  <script type="text/javascript" src="third-party/GLOW/src/core/InterleavedAttributes.js"></script>
+  <script type="text/javascript" src="third-party/GLOW/src/core/Elements.js"></script>
+  <script type="text/javascript" src="third-party/GLOW/src/core/CompiledData.js"></script>
+
+  <script type="text/javascript" src="js/spinteny.js"></script>
+
+  <script type="text/javascript" src="data.js"></script>
+
+  <!--<script type="text/javascript" src="http://benvanik.github.io/WebGL-Inspector/core/embed.js"></script>-->
+
+  <style type="text/css">
+    html,body { height: 100%; margin: 0; padding: 0; }
+    #container { margin: 0; padding: 0; }
+
+    .goog-slider-vertical,
+    .goog-slider-horizontal {
+      background-color: rgba(0, 0, 0, 0.2);
+      position: relative;
+      overflow: hidden;
+    }
+    .goog-slider-thumb {
+      position: absolute;
+      background-color: rgba(80, 80, 80, 1.0);
+      overflow: hidden;
+      cursor: grab;
+      cursor: -moz-grab;
+      cursor: -webkit-grab;
+    }
+
+    .goog-slider-thumb-dragging {
+      cursor: grabbing;
+      cursor: -moz-grabbing;
+      cursor: -webkit-grabbing;
+    }
+
+    .goog-slider-vertical .goog-slider-thumb {
+      left: 0;
+      height: 40px;
+      width: 100%;
+    }
+
+    .goog-slider-horizontal .goog-slider-thumb {
+      top: 0;
+      width: 40px;
+      height: 100%;
+    }
+    .goog-slider-disabled {
+      background-color: lightgray
+    }
+  </style>
+
+  <script>
+    var sp;
+    function load() {
+      sp = new Spinteny("container", chroms, map);
+    }
+  </script>
+</head>
+
+
+<body onload="load();">
+
+  <div id="container" style="width: 100%; height: 100%;"></div>
+
+</body>
+
+</html>
